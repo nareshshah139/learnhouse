@@ -50,6 +50,16 @@ const nextConfig = {
         ],
       },
       {
+        // Interactive course HTML is served from /public/course-assets and
+        // embedded by the same LearnHouse origin. Keep cross-origin framing
+        // blocked while allowing the course activity iframe to render it.
+        source: '/course-assets/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+        ],
+      },
+      {
         // SCORM packages are served same-origin through /api/scorm and rendered
         // inside an iframe by the player. The global frame-ancestors 'none' /
         // X-Frame-Options: DENY above blocks even same-origin framing, so the

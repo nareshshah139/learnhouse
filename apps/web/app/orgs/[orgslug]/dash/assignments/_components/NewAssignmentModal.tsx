@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useLHSession } from '@components/Contexts/LHSessionContext'
 import Modal from '@components/Objects/StyledElements/Modal/Modal'
 import NewAssignment from '@components/Objects/Modals/Activities/Create/NewActivityModal/AssignmentActivityModal'
-import { getCourse } from '@services/courses/courses'
+import { loadAssignmentCourseStructure } from './assignmentCourseStructure'
 import { getCourseThumbnailMediaDirectory } from '@services/media/media'
 import { getUriWithOrg } from '@services/config/config'
 import { ArrowLeft, BookOpen, Layers, FolderPlus, ChevronRight, PlusCircle, Backpack } from 'lucide-react'
@@ -38,7 +38,7 @@ export default function NewAssignmentModal({
 
   const { data: courseDetail, isLoading: courseLoading } = useQuery({
     queryKey: ['assignment-course-structure', selectedCourseUuid],
-    queryFn: () => getCourse(selectedCourseUuid as string, null, access_token),
+    queryFn: () => loadAssignmentCourseStructure(selectedCourseUuid as string, access_token),
     enabled: !!selectedCourseUuid && !!access_token && open,
     staleTime: 30_000,
   })

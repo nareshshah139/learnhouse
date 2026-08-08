@@ -1,0 +1,2515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Why LLM Agent Outputs Vary | Grid Dynamics</title>
+<style>:root{color-scheme:light;background:#FFFFFF}html,body{margin:0}body{box-sizing:border-box;padding:0;background:#FFFFFF}iframe{display:block;width:100%;height:100vh;margin:0 auto;border:0}</style>
+</head>
+<body>
+<iframe sandbox="allow-scripts" referrerpolicy="no-referrer" title="Why LLM Agent Outputs Vary | Grid Dynamics" srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
+&lt;title&gt;Why LLM Agent Outputs Vary | Grid Dynamics&lt;/title&gt;
+&lt;link rel=&quot;preconnect&quot; href=&quot;https://fonts.googleapis.com&quot;&gt;&lt;link rel=&quot;preconnect&quot; href=&quot;https://fonts.gstatic.com&quot; crossorigin&gt;&lt;link rel=&quot;stylesheet&quot; href=&quot;https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&amp;display=swap&quot;&gt;
+&lt;style&gt;:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 14px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans: -apple-system, system-ui, &quot;Segoe UI&quot;, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Liberation Mono&quot;,
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 430;
+  --font-weight-medium: 500;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --radius: var(--border-radius-lg, 12.5px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url(&quot;data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 17 17&#x27;%3E%3Cpath d=&#x27;M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z&#x27;/%3E%3C/svg%3E&quot;);
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme=&quot;light&quot;] {
+  color-scheme: light;
+}
+
+:root[data-theme=&quot;dark&quot;] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html &gt; body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: 5px;
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-normal);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium, 500);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+
+h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3;
+}
+
+b,
+strong,
+th {
+  font-weight: var(--font-weight-medium);
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: superellipse(1.5);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table-responsive &gt; .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead th {
+  padding-block: 8px;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 6px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align=&quot;right&quot;]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align=&quot;center&quot;]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: superellipse(1.5);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+#widget &gt; :not(.card) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--popover-foreground);
+  background: var(--popover);
+  box-shadow: none;
+  font-size: var(--font-size-tooltip);
+  line-height: var(--line-height-tooltip);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.viz-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: var(--font-weight-medium);
+}
+
+small,
+.text-small,
+.viz-badge {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls &gt; .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls &gt; .form-label &gt; :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+.btn {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn-primary {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: padding-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: padding-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type=&quot;file&quot;] {
+  padding: 0;
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control[type=&quot;file&quot;]::file-selector-button {
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+}
+
+.form-control[type=&quot;file&quot;]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type=&quot;color&quot;] {
+  width: 40px;
+  height: 28px;
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: superellipse(1.5);
+}
+
+textarea.form-control {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 32px 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-check {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+  border-color: var(--input);
+  border-radius: var(--radius-sm);
+  corner-shape: superellipse(1.5);
+  background-color: var(--secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;]:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: &quot;&quot;;
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+}
+
+.form-check-input[type=&quot;radio&quot;] {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+}
+
+.form-check-input[type=&quot;radio&quot;]:checked {
+  border: 2px solid var(--primary);
+  background:
+    radial-gradient(circle, var(--primary-foreground) 0 2.5px, transparent 3px),
+    var(--primary);
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+  box-shadow: var(--shadow-sm);
+  content: &quot;&quot;;
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--primary);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  outline: none;
+  border: 0;
+  accent-color: var(--primary);
+  background: linear-gradient(
+      color-mix(in srgb, var(--foreground) 7%, transparent),
+      color-mix(in srgb, var(--foreground) 7%, transparent)
+    )
+    center / 100% 2px no-repeat;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-webkit-slider-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range::-moz-range-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+    [aria-pressed=&quot;true&quot;],
+    [aria-selected=&quot;true&quot;],
+    .is-selected
+  ) {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.btn.viz-tile:is([aria-pressed=&quot;true&quot;], [aria-selected=&quot;true&quot;], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget &gt; svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: 16px !important;
+  height: 16px !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+
+/* ===== Grid Dynamics brand layer ===== */
+:root, :root[data-theme=&quot;light&quot;], :root[data-theme=&quot;dark&quot;] {
+  color-scheme: light;
+  --background: #FFFFFF;
+  --foreground: #000000;
+  --card: #F8F7F5;
+  --card-foreground: #000000;
+  --popover: #FFFFFF;
+  --popover-foreground: #000000;
+  --primary: #FFB800;
+  --primary-foreground: #000000;
+  --secondary: #FFFFFF;
+  --secondary-foreground: #000000;
+  --muted: rgba(0,0,0,0.06);
+  --muted-foreground: #4A4A4A;
+  --accent: #E6F2F9;
+  --accent-foreground: #0069B3;
+  --destructive: #FF8700;
+  --border: rgba(0,0,0,0.14);
+  --input: rgba(0,0,0,0.22);
+  --ring: #F7931D;
+  --blue: #0069B3;
+  --orange: #F7931D;
+  --yellow: #FFB800;
+  --viz-series-1: #FFB800;
+  --viz-series-2: #F7931D;
+  --viz-series-3: #0069B3;
+  --viz-series-4: #FF8700;
+  --viz-series-5: #4A4A4A;
+  --viz-series-6: #FFAD32;
+  --font-sans: &quot;Fira Sans&quot;, Arial, Helvetica, sans-serif;
+  --font-size-base: 16px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 600;
+  --radius: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-2xl: 0px;
+}
+
+html &gt; body {
+  background: #FFFFFF !important;
+  font-family: &quot;Fira Sans&quot;, Arial, Helvetica, sans-serif;
+  padding: 0;
+}
+
+/* Sharp enterprise corners everywhere except cards */
+.card { border-radius: 6px; border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 2px 8px rgba(0,0,0,0.06); background: #FFFFFF; }
+
+/* Brand buttons */
+.btn { border-radius: 0; text-transform: uppercase; letter-spacing: 0.02em; font-weight: 500; font-size: 14px; min-height: 36px; padding: 0 18px; }
+.btn-primary { background: #FFB800; color: #000000; border-color: #FFB800; }
+.btn-primary:not(:disabled):hover { background: #F7931D; }
+.btn-ghost { color: #4A4A4A; }
+.btn-ghost:not(:disabled):hover { background: #F5F5F5; color: #000000; }
+.form-control, .form-select { border-radius: 0; }
+.viz-badge { border-radius: 0; background: #E6F2F9; color: #0069B3; }
+.form-range { accent-color: #F7931D; }
+
+/* ===== Grid Dynamics chrome ===== */
+#gd-shell {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 28px 48px;
+}
+#gd-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 18px 28px;
+  border-bottom: 3px solid #FFB800;
+}
+#gd-topbar .gd-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 700; font-size: 18px; letter-spacing: 0.01em; color: #000000;
+}
+#gd-topbar .gd-logo .gd-mark {
+  width: 26px; height: 26px; flex: 0 0 auto;
+  background:
+    linear-gradient(#FFB800,#FFB800) 0 0/11px 11px no-repeat,
+    linear-gradient(#F7931D,#F7931D) 15px 0/11px 11px no-repeat,
+    linear-gradient(#FF8700,#FF8700) 0 15px/11px 11px no-repeat,
+    linear-gradient(#000000,#000000) 15px 15px/11px 11px no-repeat;
+}
+#gd-topbar .gd-eyebrow {
+  font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #4A4A4A;
+}
+#gd-hero {
+  max-width: 1240px; margin: 0 auto; padding: 40px 28px 8px;
+}
+#gd-hero h1 {
+  margin: 0 0 10px; font-size: 40px; line-height: 1.12; font-weight: 700; color: #000000;
+  letter-spacing: -0.01em;
+}
+#gd-hero .gd-sub { color: #4A4A4A; font-size: 17px; max-width: 760px; }
+#gd-hero .gd-rule { width: 64px; height: 4px; background: #FFB800; margin: 0 0 18px; }
+#gd-footer {
+  max-width: 1240px; margin: 0 auto; padding: 22px 28px 40px;
+  border-top: 1px solid rgba(0,0,0,0.14);
+  display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  color: #4A4A4A; font-size: 13px;
+}
+#gd-footer strong { color: #000000; font-weight: 600; }
+
+/* ===== Lesson widget brand alignment ===== */
+body #ak-llm-agent-lab { font-size: 16px; }
+body #ak-llm-agent-lab .ak-head { padding: 18px 0 14px; border-bottom: 1px solid rgba(0,0,0,0.14); }
+body #ak-llm-agent-lab .ak-avatar {
+  border-radius: 0; background: #FFB800; border: 0; color: #000000;
+  font-weight: 700; letter-spacing: 0.02em;
+}
+body #ak-llm-agent-lab .ak-course { font-weight: 600; font-size: 17px; }
+body #ak-llm-agent-lab .ak-progress-mark { height: 5px; width: 22px; background: rgba(0,0,0,0.14); }
+body #ak-llm-agent-lab .ak-progress-mark.is-current { background: #FFB800; }
+body #ak-llm-agent-lab .ak-teaching-line {
+  border-left: 4px solid #FFB800; background: #F8F7F5; padding: 12px 14px;
+  margin: 18px 0 4px; font-weight: 500;
+}
+body #ak-llm-agent-lab .ak-lesson-title h2,
+body #ak-llm-agent-lab .ak-lesson-title h3,
+body #ak-llm-agent-lab .ak-stage h3 { font-weight: 700; }
+body #ak-llm-agent-lab .ak-token,
+body #ak-llm-agent-lab .ak-step-mark,
+body #ak-llm-agent-lab .ak-layer-mark,
+body #ak-llm-agent-lab .ak-code-line,
+body #ak-llm-agent-lab .ak-bar-track,
+body #ak-llm-agent-lab .ak-risk-track,
+body #ak-llm-agent-lab .ak-impact-track,
+body #ak-llm-agent-lab .ak-branch-token,
+body #ak-llm-agent-lab .ak-loop-node,
+body #ak-llm-agent-lab .ak-lane-event { border-radius: 0; }
+body #ak-llm-agent-lab .ak-infra-item { border-top-color: #0069B3; }
+body #ak-llm-agent-lab .ak-nav { border-top: 1px solid rgba(0,0,0,0.14); padding-top: 16px; }
+
+@media (max-width: 720px) {
+  #gd-hero h1 { font-size: 30px; }
+  #gd-shell, #gd-topbar, #gd-hero, #gd-footer { padding-left: 16px; padding-right: 16px; }
+}
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;header id=&quot;gd-topbar&quot;&gt;
+  &lt;div class=&quot;gd-logo&quot;&gt;&lt;span class=&quot;gd-mark&quot; aria-hidden=&quot;true&quot;&gt;&lt;/span&gt;Grid Dynamics&lt;/div&gt;
+  &lt;div class=&quot;gd-eyebrow&quot;&gt;Engineering AI Reliability&lt;/div&gt;
+&lt;/header&gt;
+&lt;section id=&quot;gd-hero&quot;&gt;
+  &lt;div class=&quot;gd-rule&quot;&gt;&lt;/div&gt;
+  &lt;h1&gt;Why LLM &amp;amp; Agent Outputs Vary&lt;/h1&gt;
+  &lt;p class=&quot;gd-sub&quot;&gt;An interactive walkthrough from token sampling to trajectory divergence, tool loops, and the layered controls that make agent behaviour dependable in production.&lt;/p&gt;
+&lt;/section&gt;
+&lt;div id=&quot;gd-shell&quot;&gt;
+&lt;div id=&quot;ak-llm-agent-lab&quot; aria-label=&quot;Interactive lesson on why language model and agent outputs vary&quot;&gt;
+  &lt;style&gt;
+    #ak-llm-agent-lab {
+      color: var(--foreground);
+      width: 100%;
+      font-size: var(--font-size-base);
+    }
+
+    #ak-llm-agent-lab * {
+      box-sizing: border-box;
+    }
+
+    #ak-llm-agent-lab .ak-head,
+    #ak-llm-agent-lab .ak-nav,
+    #ak-llm-agent-lab .ak-teacher,
+    #ak-llm-agent-lab .ak-lesson-title,
+    #ak-llm-agent-lab .ak-trace,
+    #ak-llm-agent-lab .ak-token-row,
+    #ak-llm-agent-lab .ak-spectrum-row,
+    #ak-llm-agent-lab .ak-layer-row,
+    #ak-llm-agent-lab .ak-lane,
+    #ak-llm-agent-lab .ak-api-row,
+    #ak-llm-agent-lab .ak-impact-row {
+      display: flex;
+      align-items: center;
+    }
+
+    #ak-llm-agent-lab .ak-head {
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    #ak-llm-agent-lab .ak-teacher {
+      gap: 10px;
+    }
+
+    #ak-llm-agent-lab .ak-avatar {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--viz-series-1) 16%, transparent);
+      color: var(--foreground);
+      font-weight: 500;
+      flex: 0 0 auto;
+    }
+
+    #ak-llm-agent-lab .ak-course {
+      font-weight: 500;
+    }
+
+    #ak-llm-agent-lab .ak-progress {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #ak-llm-agent-lab .ak-progress-mark {
+      width: 18px;
+      height: 4px;
+      background: var(--border);
+    }
+
+    #ak-llm-agent-lab .ak-progress-mark.is-current {
+      background: var(--viz-series-1);
+    }
+
+    #ak-llm-agent-lab .ak-teaching-line {
+      margin: 14px 0 6px;
+      padding-left: 12px;
+      border-left: 3px solid var(--viz-series-1);
+      color: var(--foreground);
+      font-weight: 500;
+    }
+
+    #ak-llm-agent-lab .ak-stage {
+      padding: 12px 0 6px;
+      min-height: 470px;
+    }
+
+    #ak-llm-agent-lab .ak-lesson-title {
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    #ak-llm-agent-lab .ak-lesson-title h2,
+    #ak-llm-agent-lab .ak-lesson-title h3,
+    #ak-llm-agent-lab .ak-stage h3 {
+      margin: 0;
+      font-weight: 500;
+    }
+
+    #ak-llm-agent-lab .ak-two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(260px, 0.95fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    #ak-llm-agent-lab .ak-controls-stack {
+      display: grid;
+      gap: 14px;
+    }
+
+    #ak-llm-agent-lab .ak-prob-list,
+    #ak-llm-agent-lab .ak-traces,
+    #ak-llm-agent-lab .ak-loop,
+    #ak-llm-agent-lab .ak-layers,
+    #ak-llm-agent-lab .ak-lanes,
+    #ak-llm-agent-lab .ak-spectrum,
+    #ak-llm-agent-lab .ak-api-shape,
+    #ak-llm-agent-lab .ak-impact-list {
+      display: grid;
+      gap: 9px;
+    }
+
+    #ak-llm-agent-lab .ak-token-row {
+      display: grid;
+      grid-template-columns: 76px minmax(80px, 1fr) 48px;
+      gap: 10px;
+    }
+
+    #ak-llm-agent-lab .ak-token-name,
+    #ak-llm-agent-lab .ak-token-value,
+    #ak-llm-agent-lab .ak-code-key,
+    #ak-llm-agent-lab .ak-code-value {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    #ak-llm-agent-lab .ak-bar-track,
+    #ak-llm-agent-lab .ak-risk-track,
+    #ak-llm-agent-lab .ak-impact-track {
+      height: 14px;
+      background: color-mix(in srgb, var(--muted) 68%, transparent);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    #ak-llm-agent-lab .ak-bar-fill,
+    #ak-llm-agent-lab .ak-risk-fill,
+    #ak-llm-agent-lab .ak-impact-fill {
+      height: 100%;
+      background: var(--viz-series-1);
+      transition: width 220ms ease;
+    }
+
+    #ak-llm-agent-lab .ak-token-row.is-cut .ak-token-name,
+    #ak-llm-agent-lab .ak-token-row.is-cut .ak-token-value {
+      color: var(--muted-foreground);
+      text-decoration: line-through;
+    }
+
+    #ak-llm-agent-lab .ak-token-row.is-cut .ak-bar-fill {
+      background: var(--border);
+    }
+
+    #ak-llm-agent-lab .ak-trace {
+      min-height: 46px;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #ak-llm-agent-lab .ak-trace-label {
+      width: 54px;
+      color: var(--muted-foreground);
+      flex: 0 0 auto;
+    }
+
+    #ak-llm-agent-lab .ak-token,
+    #ak-llm-agent-lab .ak-step-mark,
+    #ak-llm-agent-lab .ak-layer-mark,
+    #ak-llm-agent-lab .ak-code-line {
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--viz-series-1) 10%, transparent);
+      padding: 6px 8px;
+    }
+
+    #ak-llm-agent-lab .ak-token.alt,
+    #ak-llm-agent-lab .ak-step-mark.alt {
+      background: color-mix(in srgb, var(--viz-series-2) 12%, transparent);
+    }
+
+    #ak-llm-agent-lab .ak-token.warn,
+    #ak-llm-agent-lab .ak-step-mark.warn {
+      background: color-mix(in srgb, var(--viz-series-4) 14%, transparent);
+    }
+
+    #ak-llm-agent-lab .ak-arrow {
+      color: var(--muted-foreground);
+    }
+
+    #ak-llm-agent-lab .ak-branch-board {
+      position: relative;
+      display: grid;
+      gap: 16px;
+      padding: 10px 0;
+    }
+
+    #ak-llm-agent-lab .ak-branch-line {
+      display: grid;
+      grid-template-columns: 76px repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      align-items: center;
+    }
+
+    #ak-llm-agent-lab .ak-branch-token {
+      min-height: 46px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      border-bottom: 3px solid var(--viz-series-1);
+      background: color-mix(in srgb, var(--viz-series-1) 9%, transparent);
+      padding: 6px;
+    }
+
+    #ak-llm-agent-lab .ak-branch-line.alt .ak-branch-token {
+      border-bottom-color: var(--viz-series-2);
+      background: color-mix(in srgb, var(--viz-series-2) 10%, transparent);
+    }
+
+    #ak-llm-agent-lab .ak-loop {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      align-items: stretch;
+      gap: 8px;
+    }
+
+    #ak-llm-agent-lab .ak-loop-node {
+      min-height: 86px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px;
+      border-top: 3px solid var(--viz-series-1);
+      background: color-mix(in srgb, var(--viz-series-1) 8%, transparent);
+    }
+
+    #ak-llm-agent-lab .ak-loop-node.alt {
+      border-top-color: var(--viz-series-2);
+      background: color-mix(in srgb, var(--viz-series-2) 9%, transparent);
+    }
+
+    #ak-llm-agent-lab .ak-loop-node.warn {
+      border-top-color: var(--viz-series-4);
+      background: color-mix(in srgb, var(--viz-series-4) 10%, transparent);
+    }
+
+    #ak-llm-agent-lab .ak-loop-node .text-small {
+      color: var(--muted-foreground);
+    }
+
+    #ak-llm-agent-lab .ak-layer-row {
+      display: grid;
+      grid-template-columns: 118px minmax(0, 1fr) 120px;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #ak-llm-agent-lab .ak-layer-name {
+      font-weight: 500;
+    }
+
+    #ak-llm-agent-lab .ak-layer-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    #ak-llm-agent-lab .ak-layer-mark {
+      background: color-mix(in srgb, var(--viz-series-2) 11%, transparent);
+    }
+
+    #ak-llm-agent-lab .ak-layer-mark.is-off {
+      color: var(--muted-foreground);
+      background: transparent;
+      text-decoration: line-through;
+    }
+
+    #ak-llm-agent-lab .ak-layer-risk {
+      display: grid;
+      gap: 5px;
+    }
+
+    #ak-llm-agent-lab .ak-infra-strip {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    #ak-llm-agent-lab .ak-infra-item {
+      padding-top: 8px;
+      border-top: 3px solid var(--viz-series-3);
+    }
+
+    #ak-llm-agent-lab .ak-lane {
+      display: grid;
+      grid-template-columns: 104px repeat(5, minmax(0, 1fr));
+      gap: 7px;
+      align-items: center;
+    }
+
+    #ak-llm-agent-lab .ak-lane-name {
+      color: var(--muted-foreground);
+    }
+
+    #ak-llm-agent-lab .ak-lane-event {
+      min-height: 48px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 6px;
+      border-bottom: 3px solid var(--viz-series-1);
+      background: color-mix(in srgb, var(--viz-series-1) 8%, transparent);
+    }
+
+    #ak-llm-agent-lab .ak-lane-event.alt {
+      border-bottom-color: var(--viz-series-2);
+      background: color-mix(in srgb, var(--viz-series-2) 9%, transparent);
+    }
+
+    #ak-llm-agent-lab .ak-lane-event.warn {
+      border-bottom-color: var(--viz-series-4);
+      background: color-mix(in srgb, var(--viz-series-4) 11%, transparent);
+    }
+
+    #ak-llm-agent-lab .ak-lane-event.empty {
+      border-bottom-color: var(--border);
+      background: transparent;
+      color: var(--muted-foreground);
+    }
+
+    #ak-llm-agent-lab .ak-spectrum-row {
+      display: grid;
+      grid-template-columns: minmax(144px, 0.8fr) minmax(180px, 1fr) minmax(170px, 0.9fr);
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #ak-llm-agent-lab .ak-spectrum-track {
+      position: relative;
+      height: 12px;
+      background: linear-gradient(90deg, color-mix(in srgb, var(--viz-series-2) 80%, transparent), color-mix(in srgb, var(--viz-series-1) 80%, transparent));
+      border: 1px solid var(--border);
+    }
+
+    #ak-llm-agent-lab .ak-spectrum-dot {
+      position: absolute;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: var(--foreground);
+      border: 2px solid var(--background);
+    }
+
+    #ak-llm-agent-lab .ak-profile-line {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    #ak-llm-agent-lab .ak-profile-side {
+      color: var(--muted-foreground);
+    }
+
+    #ak-llm-agent-lab .ak-profile-side:last-child {
+      text-align: right;
+    }
+
+    #ak-llm-agent-lab .ak-code-block {
+      display: grid;
+      gap: 5px;
+    }
+
+    #ak-llm-agent-lab .ak-code-line {
+      display: grid;
+      grid-template-columns: minmax(140px, 0.8fr) minmax(0, 1.2fr);
+      gap: 10px;
+      background: color-mix(in srgb, var(--muted) 42%, transparent);
+    }
+
+    #ak-llm-agent-lab .ak-code-key {
+      color: var(--muted-foreground);
+    }
+
+    #ak-llm-agent-lab .ak-api-row {
+      display: grid;
+      grid-template-columns: 136px minmax(0, 1fr);
+      gap: 10px;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #ak-llm-agent-lab .ak-api-label {
+      color: var(--muted-foreground);
+    }
+
+    #ak-llm-agent-lab .ak-impact-row {
+      display: grid;
+      grid-template-columns: minmax(130px, 0.8fr) minmax(120px, 1fr) minmax(180px, 1.2fr);
+      gap: 12px;
+    }
+
+    #ak-llm-agent-lab .ak-impact-fill {
+      background: var(--viz-series-4);
+    }
+
+    #ak-llm-agent-lab .ak-nav {
+      justify-content: space-between;
+      gap: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    #ak-llm-agent-lab .ak-nav-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    #ak-llm-agent-lab .ak-selected-detail {
+      min-height: 22px;
+      color: var(--muted-foreground);
+      margin-top: 10px;
+    }
+
+    #ak-llm-agent-lab .ak-divider-labels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      color: var(--muted-foreground);
+      margin-top: 5px;
+    }
+
+    #ak-llm-agent-lab .ak-divider-labels span:last-child {
+      text-align: right;
+    }
+
+    @media (max-width: 720px) {
+      #ak-llm-agent-lab .ak-stage {
+        min-height: 560px;
+      }
+
+      #ak-llm-agent-lab .ak-two-col {
+        grid-template-columns: 1fr;
+        gap: 18px;
+      }
+
+      #ak-llm-agent-lab .ak-loop {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      #ak-llm-agent-lab .ak-layer-row {
+        grid-template-columns: 1fr;
+        gap: 7px;
+      }
+
+      #ak-llm-agent-lab .ak-infra-strip {
+        grid-template-columns: 1fr;
+      }
+
+      #ak-llm-agent-lab .ak-lane {
+        grid-template-columns: 84px repeat(5, minmax(0, 1fr));
+      }
+
+      #ak-llm-agent-lab .ak-spectrum-row,
+      #ak-llm-agent-lab .ak-impact-row {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+    }
+
+    @media (max-width: 430px) {
+      #ak-llm-agent-lab .ak-stage {
+        min-height: 650px;
+      }
+
+      #ak-llm-agent-lab .ak-branch-line {
+        grid-template-columns: 62px repeat(4, minmax(58px, 1fr));
+        gap: 5px;
+      }
+
+      #ak-llm-agent-lab .ak-token-row {
+        grid-template-columns: 64px minmax(70px, 1fr) 42px;
+        gap: 6px;
+      }
+
+      #ak-llm-agent-lab .ak-code-line,
+      #ak-llm-agent-lab .ak-api-row {
+        grid-template-columns: 1fr;
+        gap: 4px;
+      }
+
+      #ak-llm-agent-lab .ak-lane {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+
+      #ak-llm-agent-lab .ak-lane-name {
+        grid-column: 1 / -1;
+      }
+
+      #ak-llm-agent-lab .ak-nav {
+        align-items: flex-end;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #ak-llm-agent-lab .ak-bar-fill,
+      #ak-llm-agent-lab .ak-risk-fill,
+      #ak-llm-agent-lab .ak-impact-fill {
+        transition: none;
+      }
+    }
+  &lt;/style&gt;
+
+  &lt;div class=&quot;ak-head&quot;&gt;
+    &lt;div class=&quot;ak-teacher&quot;&gt;
+      &lt;div class=&quot;ak-avatar&quot; aria-hidden=&quot;true&quot;&gt;NS&lt;/div&gt;
+      &lt;div&gt;
+        &lt;div class=&quot;ak-course&quot;&gt;Delivered by Naresh Shah · Grid Dynamics&lt;/div&gt;
+        &lt;div class=&quot;text-small text-muted&quot;&gt;Tokens → trajectories → tools → reliable effects&lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;ak-progress&quot; id=&quot;ak-progress&quot; aria-label=&quot;Lesson progress&quot;&gt;&lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;ak-teaching-line&quot; id=&quot;ak-teaching-line&quot; aria-live=&quot;polite&quot;&gt;&lt;/div&gt;
+  &lt;main class=&quot;ak-stage&quot; id=&quot;ak-stage&quot;&gt;&lt;/main&gt;
+
+  &lt;div class=&quot;ak-nav&quot;&gt;
+    &lt;span class=&quot;text-small text-muted&quot; id=&quot;ak-step-count&quot;&gt;&lt;/span&gt;
+    &lt;div class=&quot;ak-nav-actions&quot;&gt;
+      &lt;button type=&quot;button&quot; class=&quot;btn btn-ghost&quot; id=&quot;ak-back&quot;&gt;Back&lt;/button&gt;
+      &lt;button type=&quot;button&quot; class=&quot;btn btn-primary&quot; id=&quot;ak-next&quot;&gt;Next&lt;/button&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;script&gt;
+    (() =&gt; {
+      const root = document.getElementById(&#x27;ak-llm-agent-lab&#x27;);
+      const stage = root.querySelector(&#x27;#ak-stage&#x27;);
+      const teachingLine = root.querySelector(&#x27;#ak-teaching-line&#x27;);
+      const progress = root.querySelector(&#x27;#ak-progress&#x27;);
+      const count = root.querySelector(&#x27;#ak-step-count&#x27;);
+      const back = root.querySelector(&#x27;#ak-back&#x27;);
+      const next = root.querySelector(&#x27;#ak-next&#x27;);
+
+      const state = {
+        step: 0,
+        temperature: 0.8,
+        topP: 0.92,
+        sampleRun: 0,
+        seedLocked: false,
+        trajectoryRun: 0,
+        liveWorld: true,
+        parallel: true,
+        approval: false,
+        guardrails: true,
+        idempotency: true,
+        profile: &#x27;reliable&#x27;,
+        api: &#x27;responses&#x27;
+      };
+
+      const lessonLines = [
+        &#x27;A language model emits a probability distribution. The application chooses how to sample it.&#x27;,
+        &#x27;One early token changes the next context; local randomness becomes global trajectory divergence.&#x27;,
+        &#x27;An agent is a model inside a loop with tools, observations, concurrency, approvals, and a changing world.&#x27;,
+        &#x27;Reliability is layered: reduce input ambiguity, constrain generation, govern actions, and validate effects.&#x27;,
+        &#x27;Retries are normal. Duplicate real-world effects are the bug.&#x27;,
+        &#x27;Creativity knobs widen the search; reliability controls bound, observe, and validate it.&#x27;,
+        &#x27;OpenAI-compatible syntax is not a promise of equivalent state, tools, schemas, streaming, or reproducibility.&#x27;
+      ];
+
+      const titles = [
+        &#x27;1 · The next-token lottery&#x27;,
+        &#x27;2 · Autoregressive butterfly effect&#x27;,
+        &#x27;3 · Why agent trajectories diverge&#x27;,
+        &#x27;4 · The layered reliability stack&#x27;,
+        &#x27;5 · Durable execution and safe retries&#x27;,
+        &#x27;6 · API controls: reliability ↔ creativity&#x27;,
+        &#x27;7 · API structure deviations and their impact&#x27;
+      ];
+
+      const esc = (value) =&gt; String(value)
+        .replaceAll(&#x27;&amp;&#x27;, &#x27;&amp;amp;&#x27;)
+        .replaceAll(&#x27;&lt;&#x27;, &#x27;&amp;lt;&#x27;)
+        .replaceAll(&#x27;&gt;&#x27;, &#x27;&amp;gt;&#x27;)
+        .replaceAll(&#x27;&quot;&#x27;, &#x27;&amp;quot;&#x27;)
+        .replaceAll(&quot;&#x27;&quot;, &#x27;&amp;#039;&#x27;);
+
+      function mulberry32(seed) {
+        let value = seed &gt;&gt;&gt; 0;
+        return function random() {
+          value += 0x6D2B79F5;
+          let nextValue = value;
+          nextValue = Math.imul(nextValue ^ nextValue &gt;&gt;&gt; 15, nextValue | 1);
+          nextValue ^= nextValue + Math.imul(nextValue ^ nextValue &gt;&gt;&gt; 7, nextValue | 61);
+          return ((nextValue ^ nextValue &gt;&gt;&gt; 14) &gt;&gt;&gt; 0) / 4294967296;
+        };
+      }
+
+      function distribution() {
+        const source = [
+          { token: &#x27;careful&#x27;, logit: 2.55 },
+          { token: &#x27;clear&#x27;, logit: 2.20 },
+          { token: &#x27;short&#x27;, logit: 1.75 },
+          { token: &#x27;novel&#x27;, logit: 1.28 },
+          { token: &#x27;risky&#x27;, logit: 0.62 }
+        ];
+        const temp = Math.max(0.05, state.temperature);
+        const exponentials = source.map(item =&gt; Math.exp(item.logit / temp));
+        const total = exponentials.reduce((sum, value) =&gt; sum + value, 0);
+        const withProb = source.map((item, index) =&gt; ({
+          ...item,
+          probability: exponentials[index] / total
+        })).sort((a, b) =&gt; b.probability - a.probability);
+        let cumulative = 0;
+        let retained = 0;
+        withProb.forEach((item, index) =&gt; {
+          if (cumulative &lt; state.topP || index === 0) {
+            item.kept = true;
+            cumulative += item.probability;
+            retained += item.probability;
+          } else {
+            item.kept = false;
+          }
+        });
+        return withProb.map(item =&gt; ({
+          ...item,
+          sampleProbability: item.kept ? item.probability / retained : 0
+        }));
+      }
+
+      function sampleToken(items, random) {
+        const threshold = random();
+        let cumulative = 0;
+        for (const item of items) {
+          cumulative += item.sampleProbability;
+          if (threshold &lt;= cumulative &amp;&amp; item.kept) return item.token;
+        }
+        return items.find(item =&gt; item.kept).token;
+      }
+
+      function sampleSequence(seed, length = 4) {
+        const random = mulberry32(seed);
+        const items = distribution();
+        return Array.from({ length }, () =&gt; sampleToken(items, random));
+      }
+
+      function lessonShell(status = &#x27;&#x27;) {
+        return `
+          &lt;div class=&quot;ak-lesson-title&quot;&gt;
+            &lt;h2&gt;${titles[state.step]}&lt;/h2&gt;
+            ${status ? `&lt;span class=&quot;viz-badge&quot;&gt;${esc(status)}&lt;/span&gt;` : &#x27;&#x27;}
+          &lt;/div&gt;
+        `;
+      }
+
+      function renderProgress() {
+        progress.innerHTML = titles.map((_, index) =&gt; `
+          &lt;span class=&quot;ak-progress-mark ${index === state.step ? &#x27;is-current&#x27; : &#x27;&#x27;}&quot; aria-hidden=&quot;true&quot;&gt;&lt;/span&gt;
+        `).join(&#x27;&#x27;);
+        teachingLine.textContent = lessonLines[state.step];
+        count.textContent = `Step ${state.step + 1} of ${titles.length}`;
+        back.disabled = state.step === 0;
+        next.textContent = state.step === titles.length - 1 ? &#x27;Start over&#x27; : &#x27;Next&#x27;;
+      }
+
+      function renderSampler() {
+        const items = distribution();
+        const maxProbability = Math.max(...items.map(item =&gt; item.probability));
+        const runA = sampleSequence(1801 + state.sampleRun * 23);
+        const runB = sampleSequence(9127 + state.sampleRun * 47);
+        stage.innerHTML = `
+          ${lessonShell(`T ${state.temperature.toFixed(2)} · top-p ${state.topP.toFixed(2)}`)}
+          &lt;div class=&quot;ak-two-col&quot;&gt;
+            &lt;section aria-label=&quot;Next token probabilities&quot;&gt;
+              &lt;h3&gt;Candidate tokens&lt;/h3&gt;
+              &lt;div class=&quot;ak-prob-list&quot; style=&quot;margin-top: 12px;&quot;&gt;
+                ${items.map(item =&gt; `
+                  &lt;div class=&quot;ak-token-row ${item.kept ? &#x27;&#x27; : &#x27;is-cut&#x27;}&quot;&gt;
+                    &lt;span class=&quot;ak-token-name&quot;&gt;${item.token}&lt;/span&gt;
+                    &lt;div class=&quot;ak-bar-track&quot; aria-hidden=&quot;true&quot;&gt;
+                      &lt;div class=&quot;ak-bar-fill&quot; style=&quot;width: ${(item.probability / maxProbability * 100).toFixed(1)}%&quot;&gt;&lt;/div&gt;
+                    &lt;/div&gt;
+                    &lt;span class=&quot;ak-token-value text-end&quot;&gt;${Math.round(item.probability * 100)}%&lt;/span&gt;
+                  &lt;/div&gt;
+                `).join(&#x27;&#x27;)}
+              &lt;/div&gt;
+              &lt;div class=&quot;ak-divider-labels text-small&quot;&gt;
+                &lt;span&gt;retained tokens&lt;/span&gt;&lt;span&gt;struck out by top-p&lt;/span&gt;
+              &lt;/div&gt;
+            &lt;/section&gt;
+            &lt;section class=&quot;ak-controls-stack&quot; aria-label=&quot;Sampling controls&quot;&gt;
+              &lt;div class=&quot;viz-controls&quot;&gt;
+                &lt;label class=&quot;form-label&quot; for=&quot;ak-temperature&quot;&gt;
+                  Temperature &lt;strong&gt;${state.temperature.toFixed(2)}&lt;/strong&gt;
+                  &lt;input class=&quot;form-range&quot; id=&quot;ak-temperature&quot; type=&quot;range&quot; min=&quot;0.1&quot; max=&quot;1.6&quot; step=&quot;0.05&quot; value=&quot;${state.temperature}&quot;&gt;
+                &lt;/label&gt;
+                &lt;label class=&quot;form-label&quot; for=&quot;ak-top-p&quot;&gt;
+                  Top-p &lt;strong&gt;${state.topP.toFixed(2)}&lt;/strong&gt;
+                  &lt;input class=&quot;form-range&quot; id=&quot;ak-top-p&quot; type=&quot;range&quot; min=&quot;0.45&quot; max=&quot;1&quot; step=&quot;0.01&quot; value=&quot;${state.topP}&quot;&gt;
+                &lt;/label&gt;
+                &lt;button type=&quot;button&quot; class=&quot;btn btn-primary&quot; id=&quot;ak-resample&quot;&gt;Sample twice&lt;/button&gt;
+              &lt;/div&gt;
+              &lt;div class=&quot;ak-traces&quot; aria-label=&quot;Two sampled outputs&quot;&gt;
+                &lt;div class=&quot;ak-trace&quot;&gt;
+                  &lt;span class=&quot;ak-trace-label&quot;&gt;Run A&lt;/span&gt;
+                  ${runA.map(token =&gt; `&lt;span class=&quot;ak-token&quot;&gt;${token}&lt;/span&gt;`).join(&#x27;&lt;span class=&quot;ak-arrow&quot;&gt;→&lt;/span&gt;&#x27;)}
+                &lt;/div&gt;
+                &lt;div class=&quot;ak-trace&quot;&gt;
+                  &lt;span class=&quot;ak-trace-label&quot;&gt;Run B&lt;/span&gt;
+                  ${runB.map(token =&gt; `&lt;span class=&quot;ak-token alt&quot;&gt;${token}&lt;/span&gt;`).join(&#x27;&lt;span class=&quot;ak-arrow&quot;&gt;→&lt;/span&gt;&#x27;)}
+                &lt;/div&gt;
+              &lt;/div&gt;
+            &lt;/section&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-selected-detail text-small&quot;&gt;Lower temperature concentrates probability; top-p removes the tail. Neither proves factual correctness.&lt;/div&gt;
+        `;
+        stage.querySelector(&#x27;#ak-temperature&#x27;).addEventListener(&#x27;input&#x27;, event =&gt; {
+          state.temperature = Number(event.target.value);
+          render();
+        });
+        stage.querySelector(&#x27;#ak-top-p&#x27;).addEventListener(&#x27;input&#x27;, event =&gt; {
+          state.topP = Number(event.target.value);
+          render();
+        });
+        stage.querySelector(&#x27;#ak-resample&#x27;).addEventListener(&#x27;click&#x27;, () =&gt; {
+          state.sampleRun += 1;
+          render();
+        });
+      }
+
+      function buildTrajectory(seed) {
+        const options = [
+          [&#x27;verify&#x27;, &#x27;summarize&#x27;, &#x27;flag&#x27;, &#x27;escalate&#x27;],
+          [&#x27;source&#x27;, &#x27;claim&#x27;, &#x27;caveat&#x27;, &#x27;action&#x27;],
+          [&#x27;search&#x27;, &#x27;compare&#x27;, &#x27;write&#x27;, &#x27;stop&#x27;],
+          [&#x27;narrow&#x27;, &#x27;expand&#x27;, &#x27;retry&#x27;, &#x27;approve&#x27;]
+        ];
+        const random = mulberry32(seed);
+        return options.map(group =&gt; group[Math.floor(random() * group.length)]);
+      }
+
+      function renderButterfly() {
+        const seedA = 3221 + state.trajectoryRun * 31;
+        const seedB = state.seedLocked ? seedA : 8807 + state.trajectoryRun * 53;
+        const pathA = buildTrajectory(seedA);
+        const pathB = buildTrajectory(seedB);
+        const sameCount = pathA.filter((value, index) =&gt; value === pathB[index]).length;
+        stage.innerHTML = `
+          ${lessonShell(state.seedLocked ? &#x27;same seed&#x27; : &#x27;different randomness&#x27;)}
+          &lt;div class=&quot;viz-controls&quot;&gt;
+            &lt;label class=&quot;form-check form-switch&quot;&gt;
+              &lt;input class=&quot;form-check-input&quot; type=&quot;checkbox&quot; id=&quot;ak-lock-seed&quot; ${state.seedLocked ? &#x27;checked&#x27; : &#x27;&#x27;}&gt;
+              &lt;span class=&quot;form-check-label&quot;&gt;Lock the sampling seed&lt;/span&gt;
+            &lt;/label&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn btn-primary&quot; id=&quot;ak-rerun-paths&quot;&gt;Run again&lt;/button&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-branch-board&quot; aria-label=&quot;Two autoregressive trajectories&quot;&gt;
+            &lt;div class=&quot;ak-branch-line&quot;&gt;
+              &lt;span class=&quot;ak-trace-label&quot;&gt;Run A&lt;/span&gt;
+              ${pathA.map(token =&gt; `&lt;span class=&quot;ak-branch-token&quot;&gt;${token}&lt;/span&gt;`).join(&#x27;&#x27;)}
+            &lt;/div&gt;
+            &lt;div class=&quot;ak-branch-line alt&quot;&gt;
+              &lt;span class=&quot;ak-trace-label&quot;&gt;Run B&lt;/span&gt;
+              ${pathB.map(token =&gt; `&lt;span class=&quot;ak-branch-token&quot;&gt;${token}&lt;/span&gt;`).join(&#x27;&#x27;)}
+            &lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-two-col&quot; style=&quot;margin-top: 12px;&quot;&gt;
+            &lt;div&gt;
+              &lt;h3&gt;Each emitted token becomes new input&lt;/h3&gt;
+              &lt;div class=&quot;ak-trace&quot; style=&quot;margin-top: 8px;&quot;&gt;
+                &lt;span class=&quot;ak-step-mark&quot;&gt;prompt&lt;/span&gt;&lt;span class=&quot;ak-arrow&quot;&gt;→&lt;/span&gt;
+                &lt;span class=&quot;ak-step-mark&quot;&gt;token₁&lt;/span&gt;&lt;span class=&quot;ak-arrow&quot;&gt;→&lt;/span&gt;
+                &lt;span class=&quot;ak-step-mark&quot;&gt;token₂&lt;/span&gt;&lt;span class=&quot;ak-arrow&quot;&gt;→&lt;/span&gt;
+                &lt;span class=&quot;ak-step-mark&quot;&gt;new logits&lt;/span&gt;
+              &lt;/div&gt;
+            &lt;/div&gt;
+            &lt;div&gt;
+              &lt;h3&gt;${sameCount}/4 decisions matched&lt;/h3&gt;
+              &lt;div class=&quot;ak-risk-track&quot; style=&quot;margin-top: 12px;&quot; aria-label=&quot;Trajectory overlap&quot;&gt;
+                &lt;div class=&quot;ak-risk-fill&quot; style=&quot;width: ${sameCount * 25}%&quot;&gt;&lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div class=&quot;text-small text-muted&quot; style=&quot;margin-top: 6px;&quot;&gt;A seed controls one randomness source; model and backend drift can still break reproducibility.&lt;/div&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+        `;
+        stage.querySelector(&#x27;#ak-lock-seed&#x27;).addEventListener(&#x27;change&#x27;, event =&gt; {
+          state.seedLocked = event.target.checked;
+          render();
+        });
+        stage.querySelector(&#x27;#ak-rerun-paths&#x27;).addEventListener(&#x27;click&#x27;, () =&gt; {
+          state.trajectoryRun += 1;
+          render();
+        });
+      }
+
+      function agentTrace(run) {
+        const firstTool = state.parallel ? (run === &#x27;A&#x27; ? &#x27;search_web&#x27; : &#x27;read_crm&#x27;) : &#x27;read_crm&#x27;;
+        const observation = state.liveWorld
+          ? (run === &#x27;A&#x27; ? &#x27;CRM: open&#x27; : &#x27;CRM: already closed&#x27;)
+          : &#x27;snapshot: open&#x27;;
+        const decision = state.approval
+          ? (run === &#x27;A&#x27; ? &#x27;approval granted&#x27; : &#x27;approval denied&#x27;)
+          : &#x27;no approval gate&#x27;;
+        const effect = state.approval
+          ? (run === &#x27;A&#x27; ? &#x27;send follow-up&#x27; : &#x27;stop&#x27;)
+          : (observation.includes(&#x27;closed&#x27;) ? &#x27;archive task&#x27; : &#x27;send follow-up&#x27;);
+        return [firstTool, observation, decision, effect];
+      }
+
+      function renderAgentLoop() {
+        const a = agentTrace(&#x27;A&#x27;);
+        const b = agentTrace(&#x27;B&#x27;);
+        stage.innerHTML = `
+          ${lessonShell(&#x27;model + loop + world&#x27;)}
+          &lt;div class=&quot;viz-controls&quot;&gt;
+            &lt;label class=&quot;form-check form-switch&quot;&gt;
+              &lt;input class=&quot;form-check-input&quot; type=&quot;checkbox&quot; id=&quot;ak-live-world&quot; ${state.liveWorld ? &#x27;checked&#x27; : &#x27;&#x27;}&gt;
+              &lt;span class=&quot;form-check-label&quot;&gt;World changes between observations&lt;/span&gt;
+            &lt;/label&gt;
+            &lt;label class=&quot;form-check form-switch&quot;&gt;
+              &lt;input class=&quot;form-check-input&quot; type=&quot;checkbox&quot; id=&quot;ak-parallel&quot; ${state.parallel ? &#x27;checked&#x27; : &#x27;&#x27;}&gt;
+              &lt;span class=&quot;form-check-label&quot;&gt;Parallel tool calls&lt;/span&gt;
+            &lt;/label&gt;
+            &lt;label class=&quot;form-check form-switch&quot;&gt;
+              &lt;input class=&quot;form-check-input&quot; type=&quot;checkbox&quot; id=&quot;ak-approval&quot; ${state.approval ? &#x27;checked&#x27; : &#x27;&#x27;}&gt;
+              &lt;span class=&quot;form-check-label&quot;&gt;Human approval gate&lt;/span&gt;
+            &lt;/label&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-loop&quot; aria-label=&quot;Agent execution loop&quot;&gt;
+            &lt;div class=&quot;ak-loop-node&quot;&gt;&lt;strong&gt;Goal&lt;/strong&gt;&lt;span class=&quot;text-small&quot;&gt;Follow up safely&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;ak-loop-node&quot;&gt;&lt;strong&gt;Model&lt;/strong&gt;&lt;span class=&quot;text-small&quot;&gt;selects next action&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;ak-loop-node alt&quot;&gt;&lt;strong&gt;Tool&lt;/strong&gt;&lt;span class=&quot;text-small&quot;&gt;latency + failures&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;ak-loop-node alt&quot;&gt;&lt;strong&gt;World&lt;/strong&gt;&lt;span class=&quot;text-small&quot;&gt;mutable external state&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;ak-loop-node&quot;&gt;&lt;strong&gt;Observation&lt;/strong&gt;&lt;span class=&quot;text-small&quot;&gt;enters next context&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;ak-loop-node warn&quot;&gt;&lt;strong&gt;Effect&lt;/strong&gt;&lt;span class=&quot;text-small&quot;&gt;message, write, payment&lt;/span&gt;&lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-traces&quot; style=&quot;margin-top: 16px;&quot; aria-label=&quot;Two agent runs&quot;&gt;
+            &lt;div class=&quot;ak-trace&quot;&gt;&lt;span class=&quot;ak-trace-label&quot;&gt;Run A&lt;/span&gt;${a.map((token, index) =&gt; `&lt;span class=&quot;ak-token ${index &gt; 1 ? &#x27;warn&#x27; : &#x27;&#x27;}&quot;&gt;${esc(token)}&lt;/span&gt;`).join(&#x27;&lt;span class=&quot;ak-arrow&quot;&gt;→&lt;/span&gt;&#x27;)}&lt;/div&gt;
+            &lt;div class=&quot;ak-trace&quot;&gt;&lt;span class=&quot;ak-trace-label&quot;&gt;Run B&lt;/span&gt;${b.map((token, index) =&gt; `&lt;span class=&quot;ak-token alt ${index &gt; 1 ? &#x27;warn&#x27; : &#x27;&#x27;}&quot;&gt;${esc(token)}&lt;/span&gt;`).join(&#x27;&lt;span class=&quot;ak-arrow&quot;&gt;→&lt;/span&gt;&#x27;)}&lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-selected-detail text-small&quot;&gt;Agent variance = model sampling + tool routing + tool results + ordering + approvals + mutable state + stopping conditions.&lt;/div&gt;
+        `;
+        stage.querySelector(&#x27;#ak-live-world&#x27;).addEventListener(&#x27;change&#x27;, event =&gt; {
+          state.liveWorld = event.target.checked;
+          render();
+        });
+        stage.querySelector(&#x27;#ak-parallel&#x27;).addEventListener(&#x27;change&#x27;, event =&gt; {
+          state.parallel = event.target.checked;
+          render();
+        });
+        stage.querySelector(&#x27;#ak-approval&#x27;).addEventListener(&#x27;change&#x27;, event =&gt; {
+          state.approval = event.target.checked;
+          render();
+        });
+      }
+
+      function renderReliabilityStack() {
+        const rows = [
+          {
+            name: &#x27;Data&#x27;,
+            controls: [&#x27;versioned enrichment&#x27;, &#x27;canonicalize + sort&#x27;, &#x27;deduplicate claims&#x27;],
+            riskOn: 22,
+            riskOff: 82
+          },
+          {
+            name: &#x27;LLM&#x27;,
+            controls: [&#x27;pinned model + context&#x27;, &#x27;low T / top-p&#x27;, &#x27;strict JSON Schema&#x27;],
+            riskOn: 30,
+            riskOff: 76
+          },
+          {
+            name: &#x27;Actions&#x27;,
+            controls: [&#x27;Temporal Activity&#x27;, &#x27;CodeAct + feedback&#x27;, &#x27;typed tools + bounded retries&#x27;],
+            riskOn: 26,
+            riskOff: 88
+          },
+          {
+            name: &#x27;Effects&#x27;,
+            controls: [&#x27;semantic evidence check&#x27;, &#x27;idempotency key&#x27;, &#x27;unique constraint&#x27;],
+            riskOn: 16,
+            riskOff: 94
+          }
+        ];
+        stage.innerHTML = `
+          ${lessonShell(state.guardrails ? &#x27;production guardrails on&#x27; : &#x27;raw agent demo&#x27;)}
+          &lt;div class=&quot;viz-controls&quot;&gt;
+            &lt;label class=&quot;form-check form-switch&quot;&gt;
+              &lt;input class=&quot;form-check-input&quot; type=&quot;checkbox&quot; id=&quot;ak-guardrails&quot; ${state.guardrails ? &#x27;checked&#x27; : &#x27;&#x27;}&gt;
+              &lt;span class=&quot;form-check-label&quot;&gt;Enable layered controls&lt;/span&gt;
+            &lt;/label&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-layers&quot; aria-label=&quot;Four reliability layers&quot;&gt;
+            ${rows.map(row =&gt; {
+              const risk = state.guardrails ? row.riskOn : row.riskOff;
+              return `
+                &lt;div class=&quot;ak-layer-row&quot;&gt;
+                  &lt;span class=&quot;ak-layer-name&quot;&gt;${row.name} layer&lt;/span&gt;
+                  &lt;div class=&quot;ak-layer-controls&quot;&gt;
+                    ${row.controls.map(control =&gt; `&lt;span class=&quot;ak-layer-mark ${state.guardrails ? &#x27;&#x27; : &#x27;is-off&#x27;}&quot;&gt;${control}&lt;/span&gt;`).join(&#x27;&#x27;)}
+                  &lt;/div&gt;
+                  &lt;div class=&quot;ak-layer-risk&quot;&gt;
+                    &lt;span class=&quot;text-small&quot;&gt;residual risk ${risk}%&lt;/span&gt;
+                    &lt;div class=&quot;ak-risk-track&quot; aria-hidden=&quot;true&quot;&gt;&lt;div class=&quot;ak-risk-fill&quot; style=&quot;width: ${risk}%&quot;&gt;&lt;/div&gt;&lt;/div&gt;
+                  &lt;/div&gt;
+                &lt;/div&gt;
+              `;
+            }).join(&#x27;&#x27;)}
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-infra-strip&quot; aria-label=&quot;Infrastructure controls and limitations&quot;&gt;
+            &lt;div class=&quot;ak-infra-item&quot;&gt;&lt;strong&gt;Self-hosted model&lt;/strong&gt;&lt;div class=&quot;text-small text-muted&quot;&gt;Can pin weights, tokenizer, runtime, hardware, seed, kernels, and batch policy.&lt;/div&gt;&lt;/div&gt;
+            &lt;div class=&quot;ak-infra-item&quot;&gt;&lt;strong&gt;No batching&lt;/strong&gt;&lt;div class=&quot;text-small text-muted&quot;&gt;A self-hosting policy—not a public OpenAI Responses parameter.&lt;/div&gt;&lt;/div&gt;
+            &lt;div class=&quot;ak-infra-item&quot;&gt;&lt;strong&gt;PTU&lt;/strong&gt;&lt;div class=&quot;text-small text-muted&quot;&gt;Reserved capacity stabilizes throughput and latency, not token choice.&lt;/div&gt;&lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-selected-detail text-small&quot;&gt;Strict structure can contain a perfectly formatted false claim; evidence validation remains application logic.&lt;/div&gt;
+        `;
+        stage.querySelector(&#x27;#ak-guardrails&#x27;).addEventListener(&#x27;change&#x27;, event =&gt; {
+          state.guardrails = event.target.checked;
+          render();
+        });
+      }
+
+      function renderTemporal() {
+        const secondWrite = state.idempotency ? &#x27;dedup hit&#x27; : &#x27;duplicate claim&#x27;;
+        const secondClass = state.idempotency ? &#x27;alt&#x27; : &#x27;warn&#x27;;
+        stage.innerHTML = `
+          ${lessonShell(state.idempotency ? &#x27;effectively-once effect&#x27; : &#x27;duplicate side effect&#x27;)}
+          &lt;div class=&quot;viz-controls&quot;&gt;
+            &lt;label class=&quot;form-check form-switch&quot;&gt;
+              &lt;input class=&quot;form-check-input&quot; type=&quot;checkbox&quot; id=&quot;ak-idempotency&quot; ${state.idempotency ? &#x27;checked&#x27; : &#x27;&#x27;}&gt;
+              &lt;span class=&quot;form-check-label&quot;&gt;Use stable idempotency key&lt;/span&gt;
+            &lt;/label&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-lanes&quot; aria-label=&quot;Temporal workflow retry timeline&quot;&gt;
+            &lt;div class=&quot;ak-lane&quot;&gt;
+              &lt;span class=&quot;ak-lane-name&quot;&gt;Workflow&lt;/span&gt;
+              &lt;span class=&quot;ak-lane-event&quot;&gt;schedule&lt;/span&gt;
+              &lt;span class=&quot;ak-lane-event empty&quot;&gt;wait&lt;/span&gt;
+              &lt;span class=&quot;ak-lane-event warn&quot;&gt;timeout&lt;/span&gt;
+              &lt;span class=&quot;ak-lane-event&quot;&gt;retry&lt;/span&gt;
+              &lt;span class=&quot;ak-lane-event alt&quot;&gt;complete&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;ak-lane&quot;&gt;
+              &lt;span class=&quot;ak-lane-name&quot;&gt;Activity&lt;/span&gt;
+              &lt;span class=&quot;ak-lane-event alt&quot;&gt;attempt 1&lt;/span&gt;
+              &lt;span class=&quot;ak-lane-event alt&quot;&gt;write claim&lt;/span&gt;
+              &lt;span class=&quot;ak-lane-event warn&quot;&gt;ACK lost&lt;/span&gt;
+              &lt;span class=&quot;ak-lane-event alt&quot;&gt;attempt 2&lt;/span&gt;
+              &lt;span class=&quot;ak-lane-event ${secondClass}&quot;&gt;${secondWrite}&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;ak-lane&quot;&gt;
+              &lt;span class=&quot;ak-lane-name&quot;&gt;Database&lt;/span&gt;
+              &lt;span class=&quot;ak-lane-event empty&quot;&gt;—&lt;/span&gt;
+              &lt;span class=&quot;ak-lane-event alt&quot;&gt;claim #1&lt;/span&gt;
+              &lt;span class=&quot;ak-lane-event empty&quot;&gt;—&lt;/span&gt;
+              &lt;span class=&quot;ak-lane-event empty&quot;&gt;same key&lt;/span&gt;
+              &lt;span class=&quot;ak-lane-event ${secondClass}&quot;&gt;${state.idempotency ? &#x27;still 1 row&#x27; : &#x27;now 2 rows&#x27;}&lt;/span&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-two-col&quot; style=&quot;margin-top: 18px;&quot;&gt;
+            &lt;div&gt;
+              &lt;h3&gt;Deterministic Workflow&lt;/h3&gt;
+              &lt;div class=&quot;ak-trace&quot; style=&quot;margin-top: 8px;&quot;&gt;&lt;span class=&quot;ak-step-mark&quot;&gt;replay history&lt;/span&gt;&lt;span class=&quot;ak-arrow&quot;&gt;→&lt;/span&gt;&lt;span class=&quot;ak-step-mark&quot;&gt;same commands&lt;/span&gt;&lt;/div&gt;
+            &lt;/div&gt;
+            &lt;div&gt;
+              &lt;h3&gt;Nondeterministic Activity&lt;/h3&gt;
+              &lt;div class=&quot;ak-trace&quot; style=&quot;margin-top: 8px;&quot;&gt;&lt;span class=&quot;ak-step-mark alt&quot;&gt;LLM / network / tool&lt;/span&gt;&lt;span class=&quot;ak-arrow&quot;&gt;→&lt;/span&gt;&lt;span class=&quot;ak-step-mark warn&quot;&gt;may retry&lt;/span&gt;&lt;/div&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-selected-detail text-small&quot;&gt;Temporal makes orchestration durable; idempotency makes retrying external effects safe.&lt;/div&gt;
+        `;
+        stage.querySelector(&#x27;#ak-idempotency&#x27;).addEventListener(&#x27;change&#x27;, event =&gt; {
+          state.idempotency = event.target.checked;
+          render();
+        });
+      }
+
+      function profileValues() {
+        const profiles = {
+          reliable: {
+            temperature: &#x27;0.2 when supported&#x27;,
+            top_p: &#x27;1.0&#x27;,
+            model: &#x27;pinned snapshot&#x27;,
+            schema: &#x27;strict: true&#x27;,
+            tools: &#x27;allowlist / required tool&#x27;,
+            parallel: &#x27;false&#x27;,
+            bounds: &#x27;4 built-ins + app max_turns&#x27;,
+            state: &#x27;versioned instructions + input&#x27;,
+            conversation: &#x27;explicit + logged IDs&#x27;,
+            output: &#x27;task minimum&#x27;,
+            reasoning: &#x27;task-appropriate effort&#x27;,
+            verbosity: &#x27;low / medium&#x27;,
+            positions: [5, 4, 8, 8, 12, 6, 12, 10, 8, 18, 32, 42]
+          },
+          balanced: {
+            temperature: &#x27;0.7 when supported&#x27;,
+            top_p: &#x27;1.0&#x27;,
+            model: &#x27;stable alias + evals&#x27;,
+            schema: &#x27;strict for interfaces&#x27;,
+            tools: &#x27;auto within allowlist&#x27;,
+            parallel: &#x27;task-dependent&#x27;,
+            bounds: &#x27;8 built-ins + app max_turns&#x27;,
+            state: &#x27;explicit conversation state&#x27;,
+            conversation: &#x27;response ID or conversation&#x27;,
+            output: &#x27;bounded for the task&#x27;,
+            reasoning: &#x27;medium when available&#x27;,
+            verbosity: &#x27;medium&#x27;,
+            positions: [20, 18, 22, 48, 42, 12, 34, 42, 28, 36, 48, 58]
+          },
+          creative: {
+            temperature: &#x27;1.1 when supported&#x27;,
+            top_p: &#x27;0.95&#x27;,
+            model: &#x27;capability-first&#x27;,
+            schema: &#x27;strict only at handoff&#x27;,
+            tools: &#x27;auto / wider set&#x27;,
+            parallel: &#x27;true&#x27;,
+            bounds: &#x27;16 built-ins + app max_turns&#x27;,
+            state: &#x27;broad prompt latitude&#x27;,
+            conversation: &#x27;branchable state&#x27;,
+            output: &#x27;larger exploration budget&#x27;,
+            reasoning: &#x27;higher when useful&#x27;,
+            verbosity: &#x27;high&#x27;,
+            positions: [52, 58, 50, 88, 82, 24, 72, 78, 62, 72, 68, 82]
+          }
+        };
+        return profiles[state.profile];
+      }
+
+      function renderApiControls() {
+        const values = profileValues();
+        const controls = [
+          [&#x27;model&#x27;, &#x27;capability + drift&#x27;, values.model],
+          [&#x27;instructions + input&#x27;, &#x27;context reliability&#x27;, values.state],
+          [&#x27;previous_response_id&#x27;, &#x27;conversation state&#x27;, values.conversation],
+          [&#x27;temperature&#x27;, &#x27;sampling breadth&#x27;, values.temperature],
+          [&#x27;top_p&#x27;, &#x27;sampling breadth&#x27;, values.top_p],
+          [&#x27;text.format&#x27;, &#x27;schema conformance&#x27;, values.schema],
+          [&#x27;tools + tool_choice&#x27;, &#x27;action surface&#x27;, values.tools],
+          [&#x27;parallel_tool_calls&#x27;, &#x27;ordering variance&#x27;, values.parallel],
+          [&#x27;max_tool_calls&#x27;, &#x27;built-in tool bound&#x27;, values.bounds],
+          [&#x27;max_output_tokens&#x27;, &#x27;generation bound&#x27;, values.output],
+          [&#x27;reasoning.effort&#x27;, &#x27;deliberation budget&#x27;, values.reasoning],
+          [&#x27;text.verbosity&#x27;, &#x27;presentation breadth&#x27;, values.verbosity]
+        ];
+        stage.innerHTML = `
+          ${lessonShell(`${state.profile} profile`)}
+          &lt;div class=&quot;viz-controls&quot; role=&quot;group&quot; aria-label=&quot;Choose an operating profile&quot;&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn ${state.profile === &#x27;reliable&#x27; ? &#x27;btn-primary&#x27; : &#x27;&#x27;}&quot; data-profile=&quot;reliable&quot; aria-pressed=&quot;${state.profile === &#x27;reliable&#x27;}&quot;&gt;Reliability&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn ${state.profile === &#x27;balanced&#x27; ? &#x27;btn-primary&#x27; : &#x27;&#x27;}&quot; data-profile=&quot;balanced&quot; aria-pressed=&quot;${state.profile === &#x27;balanced&#x27;}&quot;&gt;Balanced&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn ${state.profile === &#x27;creative&#x27; ? &#x27;btn-primary&#x27; : &#x27;&#x27;}&quot; data-profile=&quot;creative&quot; aria-pressed=&quot;${state.profile === &#x27;creative&#x27;}&quot;&gt;Creativity&lt;/button&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-profile-line text-small&quot;&gt;&lt;span class=&quot;ak-profile-side&quot;&gt;constrain + validate&lt;/span&gt;&lt;span class=&quot;ak-profile-side&quot;&gt;explore + diversify&lt;/span&gt;&lt;/div&gt;
+          &lt;div class=&quot;ak-spectrum&quot; aria-label=&quot;OpenAI API controls mapped from reliability to creativity&quot;&gt;
+            ${controls.map((control, index) =&gt; `
+              &lt;div class=&quot;ak-spectrum-row&quot;&gt;
+                &lt;code&gt;${control[0]}&lt;/code&gt;
+                &lt;div&gt;
+                  &lt;div class=&quot;ak-spectrum-track&quot; aria-hidden=&quot;true&quot;&gt;&lt;span class=&quot;ak-spectrum-dot&quot; style=&quot;left: ${values.positions[index]}%&quot;&gt;&lt;/span&gt;&lt;/div&gt;
+                  &lt;div class=&quot;text-small text-muted&quot; style=&quot;margin-top: 4px;&quot;&gt;${control[1]}&lt;/div&gt;
+                &lt;/div&gt;
+                &lt;span&gt;${control[2]}&lt;/span&gt;
+              &lt;/div&gt;
+            `).join(&#x27;&#x27;)}
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-selected-detail text-small&quot;&gt;Outside the LLM API: Temporal, retries, idempotency, deduplication, evidence validation, PTUs, and self-hosted deterministic kernels.&lt;/div&gt;
+        `;
+        stage.querySelectorAll(&#x27;[data-profile]&#x27;).forEach(button =&gt; {
+          button.addEventListener(&#x27;click&#x27;, () =&gt; {
+            state.profile = button.dataset.profile;
+            render();
+          });
+        });
+      }
+
+      function apiContent() {
+        const api = {
+          responses: {
+            badge: &#x27;OpenAI Responses&#x27;,
+            shape: [
+              [&#x27;endpoint&#x27;, &#x27;/v1/responses&#x27;],
+              [&#x27;context&#x27;, &#x27;input + instructions&#x27;],
+              [&#x27;result&#x27;, &#x27;typed output[] items&#x27;],
+              [&#x27;state&#x27;, &#x27;previous_response_id / conversation&#x27;],
+              [&#x27;schema&#x27;, &#x27;text.format&#x27;],
+              [&#x27;tool return&#x27;, &#x27;function_call_output + call_id&#x27;],
+              [&#x27;streaming&#x27;, &#x27;typed SSE events&#x27;],
+              [&#x27;output bound&#x27;, &#x27;max_output_tokens&#x27;],
+              [&#x27;seed&#x27;, &#x27;not exposed&#x27;]
+            ],
+            impacts: [
+              [&#x27;typed tool/state semantics&#x27;, 12, &#x27;lowest adapter ambiguity&#x27;],
+              [&#x27;accidental context loss&#x27;, 28, &#x27;instructions must be resent when needed&#x27;],
+              [&#x27;reproducibility gap&#x27;, 46, &#x27;no public seed control&#x27;]
+            ]
+          },
+          chat: {
+            badge: &#x27;Chat Completions&#x27;,
+            shape: [
+              [&#x27;endpoint&#x27;, &#x27;/v1/chat/completions&#x27;],
+              [&#x27;context&#x27;, &#x27;messages[]&#x27;],
+              [&#x27;result&#x27;, &#x27;choices[].message&#x27;],
+              [&#x27;generations&#x27;, &#x27;n&#x27;],
+              [&#x27;schema&#x27;, &#x27;response_format&#x27;],
+              [&#x27;tool return&#x27;, &#x27;tool message + tool_call_id&#x27;],
+              [&#x27;streaming&#x27;, &#x27;delta chunks&#x27;],
+              [&#x27;output bound&#x27;, &#x27;max_completion_tokens&#x27;],
+              [&#x27;seed&#x27;, &#x27;seed + system_fingerprint&#x27;]
+            ],
+            impacts: [
+              [&#x27;manual agent-loop work&#x27;, 58, &#x27;application assembles state and tools&#x27;],
+              [&#x27;multi-sample support&#x27;, 18, &#x27;n enables multiple choices&#x27;],
+              [&#x27;migration mismatch&#x27;, 52, &#x27;field and item shapes differ&#x27;]
+            ]
+          },
+          compatible: {
+            badge: &#x27;“OpenAI-compatible”&#x27;,
+            shape: [
+              [&#x27;endpoint&#x27;, &#x27;often mimics Chat or Responses&#x27;],
+              [&#x27;context&#x27;, &#x27;same-looking JSON&#x27;],
+              [&#x27;schema&#x27;, &#x27;strict may degrade or be ignored&#x27;],
+              [&#x27;tools&#x27;, &#x27;parallel/order semantics may differ&#x27;],
+              [&#x27;state&#x27;, &#x27;IDs may be unsupported or emulated&#x27;],
+              [&#x27;streaming&#x27;, &#x27;event names and ordering may differ&#x27;],
+              [&#x27;model&#x27;, &#x27;aliases may point to changing weights&#x27;],
+              [&#x27;fingerprint&#x27;, &#x27;often absent&#x27;],
+              [&#x27;batching&#x27;, &#x27;provider-controlled&#x27;]
+            ],
+            impacts: [
+              [&#x27;silent control loss&#x27;, 88, &#x27;request accepted; behavior changes&#x27;],
+              [&#x27;tool-loop breakage&#x27;, 82, &#x27;IDs, ordering, or strict args differ&#x27;],
+              [&#x27;reproducibility gap&#x27;, 92, &#x27;backend/version/fingerprint opaque&#x27;]
+            ]
+          }
+        };
+        return api[state.api];
+      }
+
+      function renderDeviations() {
+        const content = apiContent();
+        stage.innerHTML = `
+          ${lessonShell(content.badge)}
+          &lt;div class=&quot;viz-controls&quot; role=&quot;group&quot; aria-label=&quot;Compare API structures&quot;&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn ${state.api === &#x27;responses&#x27; ? &#x27;btn-primary&#x27; : &#x27;&#x27;}&quot; data-api=&quot;responses&quot; aria-pressed=&quot;${state.api === &#x27;responses&#x27;}&quot;&gt;Responses&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn ${state.api === &#x27;chat&#x27; ? &#x27;btn-primary&#x27; : &#x27;&#x27;}&quot; data-api=&quot;chat&quot; aria-pressed=&quot;${state.api === &#x27;chat&#x27;}&quot;&gt;Chat Completions&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;btn ${state.api === &#x27;compatible&#x27; ? &#x27;btn-primary&#x27; : &#x27;&#x27;}&quot; data-api=&quot;compatible&quot; aria-pressed=&quot;${state.api === &#x27;compatible&#x27;}&quot;&gt;Compatible provider&lt;/button&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-two-col&quot;&gt;
+            &lt;section&gt;
+              &lt;h3&gt;Request and response shape&lt;/h3&gt;
+              &lt;div class=&quot;ak-api-shape&quot; style=&quot;margin-top: 10px;&quot;&gt;
+                ${content.shape.map(row =&gt; `
+                  &lt;div class=&quot;ak-api-row&quot;&gt;
+                    &lt;span class=&quot;ak-api-label&quot;&gt;${row[0]}&lt;/span&gt;
+                    &lt;code&gt;${esc(row[1])}&lt;/code&gt;
+                  &lt;/div&gt;
+                `).join(&#x27;&#x27;)}
+              &lt;/div&gt;
+            &lt;/section&gt;
+            &lt;section&gt;
+              &lt;h3&gt;Operational impact&lt;/h3&gt;
+              &lt;div class=&quot;ak-impact-list&quot; style=&quot;margin-top: 12px;&quot;&gt;
+                ${content.impacts.map(row =&gt; `
+                  &lt;div class=&quot;ak-impact-row&quot;&gt;
+                    &lt;span&gt;${row[0]}&lt;/span&gt;
+                    &lt;div class=&quot;ak-impact-track&quot; aria-hidden=&quot;true&quot;&gt;&lt;div class=&quot;ak-impact-fill&quot; style=&quot;width: ${row[1]}%&quot;&gt;&lt;/div&gt;&lt;/div&gt;
+                    &lt;span class=&quot;text-small text-muted&quot;&gt;${row[2]}&lt;/span&gt;
+                  &lt;/div&gt;
+                `).join(&#x27;&#x27;)}
+              &lt;/div&gt;
+            &lt;/section&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;ak-selected-detail text-small&quot;&gt;Compatibility has three levels: request syntax → response shape → behavioral semantics. Test all three with contract tests and evals.&lt;/div&gt;
+        `;
+        stage.querySelectorAll(&#x27;[data-api]&#x27;).forEach(button =&gt; {
+          button.addEventListener(&#x27;click&#x27;, () =&gt; {
+            state.api = button.dataset.api;
+            render();
+          });
+        });
+      }
+
+      function render() {
+        renderProgress();
+        if (state.step === 0) renderSampler();
+        if (state.step === 1) renderButterfly();
+        if (state.step === 2) renderAgentLoop();
+        if (state.step === 3) renderReliabilityStack();
+        if (state.step === 4) renderTemporal();
+        if (state.step === 5) renderApiControls();
+        if (state.step === 6) renderDeviations();
+      }
+
+      back.addEventListener(&#x27;click&#x27;, () =&gt; {
+        state.step = Math.max(0, state.step - 1);
+        render();
+      });
+
+      next.addEventListener(&#x27;click&#x27;, () =&gt; {
+        state.step = state.step === titles.length - 1 ? 0 : state.step + 1;
+        render();
+      });
+
+      render();
+    })();
+  &lt;/script&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;footer id=&quot;gd-footer&quot;&gt;
+  &lt;div&gt;&lt;strong&gt;Grid Dynamics&lt;/strong&gt; · Delivered by Naresh Shah&lt;/div&gt;
+  &lt;div&gt;Tokens &amp;#8594; trajectories &amp;#8594; tools &amp;#8594; reliable effects&lt;/div&gt;
+&lt;/footer&gt;
+
+&lt;script src=&quot;https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set([&quot;top&quot;, &quot;right&quot;, &quot;bottom&quot;, &quot;left&quot;]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+
+  const getTrigger = (target) =&gt;
+    target?.nodeType === Node.ELEMENT_NODE
+      ? target.closest(&quot;[data-tooltip]&quot;)
+      : null;
+  const containsTarget = (trigger, target) =&gt;
+    target?.nodeType != null &amp;&amp; trigger.contains(target);
+  const getContent = (trigger) =&gt;
+    trigger.getAttribute(&quot;data-tooltip&quot;)?.trim() ?? &quot;&quot;;
+  const getPlacement = (trigger) =&gt; {
+    const placement = trigger.getAttribute(&quot;data-tooltip-placement&quot;);
+    return tooltipPlacements.has(placement) ? placement : &quot;top&quot;;
+  };
+  const getTooltip = () =&gt; {
+    if (tooltip == null) {
+      tooltip = document.createElement(&quot;div&quot;);
+      tooltip.id = tooltipId;
+      tooltip.className = &quot;tooltip&quot;;
+      tooltip.setAttribute(&quot;role&quot;, &quot;tooltip&quot;);
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) =&gt; {
+    const ids = new Set(
+      (trigger.getAttribute(&quot;aria-describedby&quot;) ?? &quot;&quot;)
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute(&quot;aria-describedby&quot;);
+    } else {
+      trigger.setAttribute(&quot;aria-describedby&quot;, [...ids].join(&quot; &quot;));
+    }
+  };
+  const clearOpenTimeout = () =&gt; {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) =&gt; {
+    clearOpenTimeout();
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) =&gt; {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-width&quot;,
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-height&quot;,
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: &quot;fixed&quot;,
+    })
+      .then(({ x, y }) =&gt; {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = &quot;visible&quot;;
+      })
+      .catch(() =&gt; {
+        if (activeTrigger === trigger &amp;&amp; request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) =&gt; {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = &quot;hidden&quot;;
+    floating.style.transform = &quot;translate(0, 0)&quot;;
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () =&gt; {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) =&gt; {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() &lt; skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() =&gt; {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) =&gt; {
+    if (event.pointerType === &quot;touch&quot;) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handleLeave = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (trigger?.matches(&quot;:focus-visible&quot;)) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) =&gt; {
+    if (event.key === &quot;Escape&quot;) {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const destroy = () =&gt; {
+    closeTooltip(false);
+    document.removeEventListener(&quot;pointerover&quot;, handlePointerOpen);
+    document.removeEventListener(&quot;pointerout&quot;, handleLeave);
+    document.removeEventListener(&quot;focusin&quot;, handleFocusIn);
+    document.removeEventListener(&quot;focusout&quot;, handleLeave);
+    document.removeEventListener(&quot;keydown&quot;, handleKeyDown);
+    document.removeEventListener(&quot;contextmenu&quot;, handleContextMenu);
+    tooltip = null;
+  };
+
+  document.addEventListener(&quot;pointerover&quot;, handlePointerOpen);
+  document.addEventListener(&quot;pointerout&quot;, handleLeave);
+  document.addEventListener(&quot;focusin&quot;, handleFocusIn);
+  document.addEventListener(&quot;focusout&quot;, handleLeave);
+  document.addEventListener(&quot;keydown&quot;, handleKeyDown);
+  document.addEventListener(&quot;contextmenu&quot;, handleContextMenu);
+  window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-lucide&quot; async src=&quot;https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  const initialize = () =&gt; {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById(&quot;codex-visualization-lucide&quot;)
+    ?.addEventListener(&quot;load&quot;, initialize, { once: true });
+})();
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe>
+</body>
+</html>

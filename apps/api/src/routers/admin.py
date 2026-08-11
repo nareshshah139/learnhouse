@@ -5,9 +5,11 @@ All endpoints are scoped by org_slug and require API token authentication
 (Bearer lh_...). The token's organization must match the org_slug in the URL.
 """
 
+import html as html_lib
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
+
+from fastapi import APIRouter, Depends, Form, HTTPException, Path, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -973,14 +975,83 @@ def _render_magic_link_error(title: str, message: str) -> HTMLResponse:
     return HTMLResponse(content=html, status_code=410)
 
 
+def _render_magic_link_confirmation(org_slug: str, token: str) -> HTMLResponse:
+    """Render a confirmation form without consuming the one-time token.
+
+    Link previewers and security scanners routinely follow URLs from chat and
+    email. Requiring an explicit same-origin POST keeps those GET requests from
+    burning a learner's one-time sign-in token.
+    """
+    safe_action_slug = html_lib.escape(quote(org_slug, safe=""), quote=True)
+    safe_token = html_lib.escape(token, quote=True)
+    html = f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Continue signing in — LearnHouse</title>
+<style>
+  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: #f6f7f9; color: #111827; margin: 0;
+         display: flex; align-items: center; justify-content: center; min-height: 100vh; }}
+  .card {{ background: #fff; border-radius: 14px; padding: 40px 36px; max-width: 440px;
+           box-shadow: 0 10px 30px rgba(17,24,39,0.08); text-align: center; }}
+  h1 {{ font-size: 22px; margin: 0 0 12px; color: #111827; }}
+  p  {{ font-size: 15px; line-height: 1.55; color: #4b5563; margin: 0 0 24px; }}
+  button {{ border: 0; cursor: pointer; background: #111827; color: #fff;
+            padding: 11px 24px; border-radius: 999px; font-weight: 600; font-size: 14px; }}
+  button:hover {{ background: #1f2937; }}
+</style>
+</head>
+<body>
+  <main class="card">
+    <h1>Continue signing in</h1>
+    <p>Press the button below to sign in to your LearnHouse account.</p>
+    <form method="post" action="/api/v1/admin/{safe_action_slug}/auth/magic-consume">
+      <input type="hidden" name="token" value="{safe_token}">
+      <button type="submit">Sign in</button>
+    </form>
+  </main>
+</body>
+</html>"""
+    return HTMLResponse(
+        content=html,
+        status_code=200,
+        headers={
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache",
+            "Referrer-Policy": "no-referrer",
+            "X-Robots-Tag": "noindex, nofollow",
+        },
+    )
+
+
 @router.get(
     "/{org_slug}/auth/magic-consume",
-    summary="Consume a magic sign-in link (browser-facing)",
+    summary="Review a magic sign-in link (browser-facing)",
     description=(
-        "Public endpoint — no API token required. Validates the magic-link "
-        "JWT from the query string, sets authentication cookies, and redirects "
-        "to the target path. On error, renders a friendly HTML page with a "
-        "support link instead of a raw JSON error."
+        "Public endpoint — no API token required. Displays a confirmation form "
+        "without consuming the one-time token, so automated link previews and "
+        "security scanners cannot invalidate it."
+    ),
+    responses={
+        200: {"description": "Confirmation page (HTML)"},
+    },
+)
+async def api_admin_magic_review(
+    org_slug: str,
+    token: str = Query(..., description="Magic-link JWT"),
+):
+    return _render_magic_link_confirmation(org_slug=org_slug, token=token)
+
+
+@router.post(
+    "/{org_slug}/auth/magic-consume",
+    summary="Consume a confirmed magic sign-in link (browser-facing)",
+    description=(
+        "Public endpoint — no API token required. Consumes the magic-link JWT "
+        "after explicit learner confirmation, sets authentication cookies, and "
+        "redirects to the target path."
     ),
     responses={
         302: {"description": "Success — cookies set and redirect to target"},
@@ -989,9 +1060,8 @@ def _render_magic_link_error(title: str, message: str) -> HTMLResponse:
 )
 async def api_admin_magic_consume(
     request: Request,
-    response: Response,
     org_slug: str,
-    token: str = Query(..., description="Magic-link JWT"),
+    token: str = Form(..., description="Magic-link JWT"),
     db_session: AsyncSession = Depends(get_db_session),
 ):
     try:

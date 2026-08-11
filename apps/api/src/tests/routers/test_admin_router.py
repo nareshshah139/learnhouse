@@ -1,7 +1,7 @@
 """Router tests for src/routers/admin.py."""
 
 from contextlib import contextmanager
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -361,14 +361,39 @@ class TestAdminRouter:
             new_callable=AsyncMock,
             # 5th element is the MFA pending token; None = no second factor.
             return_value=(_mock_user(), "access_tok", "refresh_tok", "/dashboard", None),
-        ):
+        ) as consume:
             response = await client.get(
                 "/api/v1/admin/acme/auth/magic-consume",
                 params={"token": "good"},
                 follow_redirects=False,
             )
+        assert response.status_code == 200
+        assert "Sign in" in response.text
+        assert 'method="post"' in response.text
+        assert response.headers["cache-control"] == "no-store"
+        consume.assert_not_awaited()
+
+        response = await client.get(
+            "/api/v1/admin/acme/auth/magic-consume",
+            params={"token": '\"><script>alert(1)</script>'},
+        )
+        assert '<script>alert(1)</script>' not in response.text
+        assert "&lt;script&gt;alert(1)&lt;/script&gt;" in response.text
+
+        with patch(
+            "src.routers.admin.consume_magic_link_token",
+            new_callable=AsyncMock,
+            return_value=(_mock_user(), "access_tok", "refresh_tok", "/dashboard", None),
+        ) as consume:
+            response = await client.post(
+                "/api/v1/admin/acme/auth/magic-consume",
+                data={"token": "good"},
+                headers={"origin": "http://test"},
+                follow_redirects=False,
+            )
         assert response.status_code == 302
         assert response.headers["location"] == "/dashboard"
+        consume.assert_awaited_once_with(token="good", db_session=ANY)
 
         # A 2FA-enabled user gets bounced to the code challenge instead of a
         # session: the magic link must not walk past their second factor.
@@ -377,9 +402,10 @@ class TestAdminRouter:
             new_callable=AsyncMock,
             return_value=(_mock_user(), None, None, "/dashboard", "pending-tok"),
         ):
-            response = await client.get(
+            response = await client.post(
                 "/api/v1/admin/acme/auth/magic-consume",
-                params={"token": "good"},
+                data={"token": "good"},
+                headers={"origin": "http://test"},
                 follow_redirects=False,
             )
         assert response.status_code == 302
@@ -393,9 +419,10 @@ class TestAdminRouter:
             new_callable=AsyncMock,
             side_effect=HTTPException(status_code=410, detail="Link expired"),
         ):
-            response = await client.get(
+            response = await client.post(
                 "/api/v1/admin/acme/auth/magic-consume",
-                params={"token": "bad"},
+                data={"token": "bad"},
+                headers={"origin": "http://test"},
             )
         assert response.status_code == 410
         assert "text/html" in response.headers["content-type"]

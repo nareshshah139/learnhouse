@@ -423,7 +423,7 @@ class TestAdminRouter:
                 follow_redirects=False,
             )
         assert response.status_code == 302
-        assert response.headers["location"].startswith("/auth/login?mfa_token=pending-tok")
+        assert response.headers["location"].startswith("/login?mfa_token=pending-tok")
         assert "redirect_to=%2Fdashboard" in response.headers["location"]
         # No session cookies may be set on the challenge redirect.
         assert "LH_access" not in response.headers.get("set-cookie", "")
@@ -441,6 +441,8 @@ class TestAdminRouter:
         assert response.status_code == 410
         assert "text/html" in response.headers["content-type"]
         assert "Link expired" in response.text
+        assert 'href="/login"' in response.text
+        assert "Sign in with password" in response.text
 
     async def test_bulk_enrollment_and_course_listings(self, client, api_user):
         """Bulk enroll/unenroll, course enrollment listing, progress reset, course analytics."""

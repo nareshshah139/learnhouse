@@ -962,10 +962,12 @@ def _render_magic_link_error(title: str, message: str) -> HTMLResponse:
            box-shadow: 0 10px 30px rgba(17,24,39,0.08); text-align: center; }}
   h1 {{ font-size: 22px; margin: 0 0 12px; color: #111827; }}
   p  {{ font-size: 15px; line-height: 1.55; color: #4b5563; margin: 0 0 24px; }}
-  .support {{ display: inline-block; background: #111827; color: #fff !important;
-              text-decoration: none; padding: 11px 20px; border-radius: 999px;
-              font-weight: 500; font-size: 14px; }}
-  .support:hover {{ background: #1f2937; }}
+  .actions {{ display: flex; flex-direction: column; align-items: center; gap: 12px; }}
+  .login {{ display: inline-block; background: #111827; color: #fff !important;
+            text-decoration: none; padding: 11px 20px; border-radius: 999px;
+            font-weight: 600; font-size: 14px; }}
+  .login:hover {{ background: #1f2937; }}
+  .support {{ color: #4b5563; font-size: 14px; }}
   .hint {{ font-size: 13px; color: #9ca3af; margin-top: 20px; }}
 </style>
 </head>
@@ -973,7 +975,10 @@ def _render_magic_link_error(title: str, message: str) -> HTMLResponse:
   <div class="card">
     <h1>{safe_title}</h1>
     <p>{safe_message}</p>
-    <a class="support" href="{support}">Something not working as expected?</a>
+    <div class="actions">
+      <a class="login" href="/login">Sign in with password</a>
+      <a class="support" href="{support}">Contact support</a>
+    </div>
     <p class="hint">Our team can re-issue your sign-in link or help you access your account.</p>
   </div>
 </body>
@@ -1087,7 +1092,7 @@ async def api_admin_magic_consume(
         # No cookies set — the link only gets the user as far as the code
         # challenge. The login page picks the pending token up from the query
         # string and opens directly on the second-factor step.
-        challenge_url = f"/auth/login?mfa_token={quote(mfa_token, safe='')}"
+        challenge_url = f"/login?mfa_token={quote(mfa_token, safe='')}"
         if redirect_to:
             challenge_url += f"&redirect_to={quote(redirect_to, safe='')}"
         return RedirectResponse(url=challenge_url, status_code=302)

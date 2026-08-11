@@ -2,6 +2,7 @@ import { getAPIUrl } from './services/config/config'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { isLocalhost as isLocalhostCheck } from './services/utils/ts/hostUtils'
+import { getPublicAuthAlias } from './services/auth/publicAuthPath'
 
 // =============================================================================
 // Tenancy
@@ -242,6 +243,16 @@ export default async function proxy(req: NextRequest) {
   ])
   if (pathname !== pathname.toLowerCase() && CANONICAL_LOWER.has(pathname.toLowerCase())) {
     return NextResponse.redirect(new URL(`${pathname.toLowerCase()}${search}`, req.url), 308)
+  }
+
+  // `/auth/*` page paths are internal rewrite destinations, but older support
+  // messages and bookmarks can still contain them. Sending those through the
+  // tenant catch-all produces a 404. Redirect only the known page aliases to
+  // their public routes; callback, SSO, token-exchange and magic paths continue
+  // through their dedicated handlers below.
+  const publicAuthAlias = getPublicAuthAlias(pathname)
+  if (publicAuthAlias) {
+    return NextResponse.redirect(new URL(`${publicAuthAlias}${search}`, req.url), 308)
   }
 
   // -------------------------------------------------------------------------

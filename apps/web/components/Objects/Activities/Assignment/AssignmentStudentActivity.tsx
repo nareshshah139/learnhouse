@@ -14,6 +14,7 @@ import { AlarmClockOff, Backpack, Calendar, CheckCircle2, Download, EllipsisVert
 import Link from 'next/link';
 import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next';
+import AssignmentMarkdown from './AssignmentMarkdown';
 
 type ParsedDueDate = { at: Date; hasTime: boolean }
 
@@ -200,7 +201,7 @@ function AssignmentStudentActivity() {
               <h3 className='text-sm font-semibold'>{t('assignments.assignment_description')}</h3>
             </div>
             <div className='pl-6'>
-              <p className='text-sm leading-relaxed text-slate-600'>{assignments.assignment_object.description}</p>
+              <AssignmentMarkdown content={assignments.assignment_object.description} />
             </div>
           </div>
         </div>
@@ -217,10 +218,12 @@ function AssignmentStudentActivity() {
 
         return (
           <div className='flex flex-col space-y-2' key={task.assignment_task_uuid}>
-            <div className='flex flex-col md:flex-row md:justify-between py-2 space-y-2 md:space-y-0'>
-              <div className='flex flex-wrap space-x-2 font-semibold text-slate-800'>
-                <p>{t('assignments.task')} {index + 1} : </p>
-                <p className='text-slate-500 break-words'>{task.description}</p>
+            <div className='flex flex-col md:flex-row md:justify-between gap-3 py-2'>
+              <div className='min-w-0 flex-1 text-slate-800'>
+                <p className='mb-2 text-xs font-bold uppercase tracking-wider text-slate-500'>
+                  {t('assignments.task')} {index + 1}
+                </p>
+                <AssignmentMarkdown content={task.description} />
               </div>
               <div className='flex flex-wrap gap-2'>
                 {task.hint && <div

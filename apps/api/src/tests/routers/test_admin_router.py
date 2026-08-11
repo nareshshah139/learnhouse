@@ -328,6 +328,20 @@ class TestAdminRouter:
         assert response.json()["first_name"] == "Updated"
 
         with _admin_context(api_user), patch(
+            "src.routers.admin.reset_user_password_admin",
+            new_callable=AsyncMock,
+            return_value=_mock_user(),
+        ) as reset_password:
+            response = await client.put(
+                "/api/v1/admin/acme/users/2/password",
+                json={"new_password": "NewStrong!Passphrase9"},
+            )
+        assert response.status_code == 200
+        reset_password.assert_awaited_once_with(
+            api_user, 2, "NewStrong!Passphrase9", ANY
+        )
+
+        with _admin_context(api_user), patch(
             "src.routers.admin.change_user_role",
             new_callable=AsyncMock,
             return_value={"user_id": 2, "role_id": 3},

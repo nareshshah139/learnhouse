@@ -53,6 +53,7 @@ from src.services.admin.admin import (
     remove_usergroup_member,
     remove_user_from_org_admin,
     reset_user_progress,
+    reset_user_password_admin,
     revoke_certificate,
     uncomplete_activity,
     unenroll_user,
@@ -234,6 +235,11 @@ class UpdateUserRequest(BaseModel):
     bio: Optional[str] = None
     details: Optional[Dict[str, Any]] = None
     profile: Optional[Dict[str, Any]] = None
+
+
+class AdminPasswordResetRequest(BaseModel):
+    """Replacement credential for an administrator-initiated password reset."""
+    new_password: str = Field(min_length=8, max_length=256)
 
 
 class ChangeRoleRequest(BaseModel):
@@ -1327,6 +1333,36 @@ async def api_admin_update_user_profile(
     await _resolve_org_slug(org_slug, token_user, db_session)
     updates = body.model_dump(exclude_unset=True)
     return await update_user_profile(token_user, user_id, updates, db_session)
+
+
+@router.put(
+    "/{org_slug}/users/{user_id}/password",
+    response_model=UserRead,
+    summary="Reset an organization member's password",
+    description=(
+        "Reset an org member's password, clear account lockout state, and revoke "
+        "their existing sessions. Requires a full-access API token created by a "
+        "user who is still an organization Admin."
+    ),
+    responses={
+        200: {"description": "Password reset successfully; existing sessions revoked.", "model": UserRead},
+        400: {"description": "New password fails validation"},
+        403: {"description": "Token is not full-access, creator is not a current Admin, or target belongs to another org"},
+        404: {"description": "User not found"},
+    },
+)
+async def api_admin_reset_user_password(
+    org_slug: str,
+    user_id: int,
+    body: AdminPasswordResetRequest,
+    current_user=Depends(get_current_user),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> UserRead:
+    token_user = _require_api_token(current_user)
+    await _resolve_org_slug(org_slug, token_user, db_session)
+    return await reset_user_password_admin(
+        token_user, user_id, body.new_password, db_session
+    )
 
 
 @router.patch(

@@ -71,10 +71,12 @@ from src.services.admin.admin import (
     remove_usergroup_member,
     remove_user_from_org_admin,
     reset_user_progress,
+    reset_user_password_admin,
     revoke_certificate,
     unenroll_user,
     update_user_profile,
 )
+from src.security.security import security_verify_password
 
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
@@ -2125,6 +2127,69 @@ class TestUpdateUserProfile:
             )
         assert exc.value.status_code == 400
         assert exc.value.detail["code"] == "PROFILE_FIELD_INVALID"
+
+
+class TestResetUserPasswordAdmin:
+
+    @staticmethod
+    def _grant_full_access(token_user):
+        token_user.rights = {
+            "courses": {"action_create": True, "action_read": True, "action_read_own": True, "action_update": True, "action_update_own": True, "action_delete": True, "action_delete_own": True},
+            "activities": {"action_create": True, "action_read": True, "action_update": True, "action_delete": True},
+            "assignments": {"action_create": True, "action_read": True, "action_update": True, "action_delete": True},
+            "coursechapters": {"action_create": True, "action_read": True, "action_update": True, "action_delete": True},
+            "folders": {"action_create": True, "action_read": True, "action_update": True, "action_delete": True},
+            "media": {"action_create": True, "action_read": True, "action_update": True, "action_delete": True},
+            "certifications": {"action_create": True, "action_read": True, "action_update": True, "action_delete": True},
+            "usergroups": {"action_create": True, "action_read": True, "action_update": True, "action_delete": True},
+            "payments": {"action_create": True, "action_read": True, "action_update": True, "action_delete": True},
+            "search": {"action_read": True},
+        }
+
+    async def test_resets_password_and_revokes_existing_sessions(self, token_user, user, db):
+        self._grant_full_access(token_user)
+        user.failed_login_attempts = 4
+        user.locked_until = "2099-01-01T00:00:00Z"
+        await db.commit()
+
+        result = await reset_user_password_admin(
+            token_user, user.id, "NewStrong!Passphrase9", db
+        )
+
+        await db.refresh(user)
+        assert result.id == user.id
+        assert security_verify_password("NewStrong!Passphrase9", user.password)
+        assert user.password_changed_at is not None
+        assert user.failed_login_attempts == 0
+        assert user.locked_until is None
+
+    async def test_rejects_non_full_access_token(self, token_user, user, db):
+        token_user.rights = {"courses": {"action_read": True}}
+
+        with pytest.raises(HTTPException) as exc:
+            await reset_user_password_admin(
+                token_user, user.id, "NewStrong!Passphrase9", db
+            )
+
+        assert exc.value.status_code == 403
+
+    async def test_rejects_token_whose_creator_is_no_longer_admin(self, token_user, user, db):
+        self._grant_full_access(token_user)
+        membership = (await db.execute(
+            select(UserOrganization).where(
+                UserOrganization.user_id == user.id,
+                UserOrganization.org_id == token_user.org_id,
+            )
+        )).scalars().first()
+        membership.role_id = 4
+        await db.commit()
+
+        with pytest.raises(HTTPException) as exc:
+            await reset_user_password_admin(
+                token_user, user.id, "NewStrong!Passphrase9", db
+            )
+
+        assert exc.value.status_code == 403
 
 
 # ── Change user role tests ──────────────────────────────────────────────────

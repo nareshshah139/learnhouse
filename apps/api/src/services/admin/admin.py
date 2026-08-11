@@ -5,7 +5,7 @@ Provides headless API operations using API token authentication.
 All functions require an APITokenUser and operate within the token's org scope.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import uuid4
 from fastapi import HTTPException, Request, status
@@ -1877,6 +1877,59 @@ _USER_UPDATABLE_FIELDS = {
     "avatar_image", "bio", "details", "profile",
 }
 
+_FULL_ACCESS_TOKEN_REQUIREMENTS = {
+    "courses": {"action_create", "action_read", "action_read_own", "action_update", "action_update_own", "action_delete", "action_delete_own"},
+    "activities": {"action_create", "action_read", "action_update", "action_delete"},
+    "assignments": {"action_create", "action_read", "action_update", "action_delete"},
+    "coursechapters": {"action_create", "action_read", "action_update", "action_delete"},
+    "folders": {"action_create", "action_read", "action_update", "action_delete"},
+    "media": {"action_create", "action_read", "action_update", "action_delete"},
+    "certifications": {"action_create", "action_read", "action_update", "action_delete"},
+    "usergroups": {"action_create", "action_read", "action_update", "action_delete"},
+    "payments": {"action_create", "action_read", "action_update", "action_delete"},
+    "search": {"action_read"},
+}
+
+
+async def _require_full_access_admin_token(
+    token_user: APITokenUser,
+    db_session: AsyncSession,
+) -> None:
+    """Require both a full-access token and a still-active org Admin creator."""
+    rights = token_user.rights or {}
+    if hasattr(rights, "model_dump"):
+        rights = rights.model_dump()
+
+    full_access = isinstance(rights, dict)
+    if full_access:
+        for resource, required_actions in _FULL_ACCESS_TOKEN_REQUIREMENTS.items():
+            resource_rights = rights.get(resource)
+            if hasattr(resource_rights, "model_dump"):
+                resource_rights = resource_rights.model_dump()
+            if not isinstance(resource_rights, dict) or any(
+                resource_rights.get(action) is not True for action in required_actions
+            ):
+                full_access = False
+                break
+
+    if not full_access:
+        raise HTTPException(
+            status_code=403,
+            detail="Password reset requires a full-access API token",
+        )
+
+    creator_membership = (await db_session.execute(
+        select(UserOrganization).where(
+            UserOrganization.user_id == token_user.created_by_user_id,
+            UserOrganization.org_id == token_user.org_id,
+        )
+    )).scalars().first()
+    if not creator_membership or creator_membership.role_id != ADMIN_ROLE_ID:
+        raise HTTPException(
+            status_code=403,
+            detail="Password reset requires a token created by a current organization Admin",
+        )
+
 
 async def update_user_profile(
     token_user: APITokenUser,
@@ -1927,6 +1980,51 @@ async def update_user_profile(
             setattr(user, field, value)
 
     user.update_date = str(datetime.now())
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    try:
+        from src.routers.users import _invalidate_session_cache
+        _invalidate_session_cache(user_id)
+    except Exception:
+        pass
+
+    return UserRead.model_validate(user)
+
+
+async def reset_user_password_admin(
+    token_user: APITokenUser,
+    user_id: int,
+    new_password: str,
+    db_session: AsyncSession,
+) -> UserRead:
+    """Reset an org member's password using a full-access Admin-created token.
+
+    Updating ``password_changed_at`` invalidates all pre-existing access and
+    refresh tokens. Account lockout counters are cleared so the learner can use
+    the replacement credential immediately.
+    """
+    await _require_full_access_admin_token(token_user, db_session)
+
+    validation = validate_password_complexity(new_password)
+    if not validation.is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "WEAK_PASSWORD",
+                "message": "Password does not meet security requirements",
+                "errors": validation.errors,
+            },
+        )
+
+    user = await _get_user_in_org(user_id, token_user.org_id, db_session)
+    changed_at = datetime.now(timezone.utc)
+    user.password = security_hash_password(new_password)
+    user.password_changed_at = changed_at
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    user.update_date = str(changed_at)
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)

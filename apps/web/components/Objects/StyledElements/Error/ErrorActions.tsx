@@ -75,9 +75,13 @@ export interface ErrorActionsProps {
 export default function ErrorActions({ resolutions, reset, eventId, loginNext }: ErrorActionsProps) {
   const router = useRouter()
   const [signingOut, setSigningOut] = useState(false)
+  const [loggingIn, setLoggingIn] = useState(false)
 
   // Dedupe while preserving order.
   const kinds = Array.from(new Set(resolutions))
+  const loginHref = loginNext
+    ? `/login?next=${encodeURIComponent(loginNext)}`
+    : '/login'
 
   const retry = () => {
     if (reset) {
@@ -97,9 +101,19 @@ export default function ErrorActions({ resolutions, reset, eventId, loginNext }:
     }
   }
 
-  const loginHref = loginNext
-    ? `/login?next=${encodeURIComponent(loginNext)}`
-    : '/login'
+  const doLogin = async () => {
+    setLoggingIn(true)
+    try {
+      // A session-expired page can still have the non-httpOnly LH_session
+      // marker and revoked auth cookies. A plain /login link makes the proxy
+      // bounce that stale browser straight back to the protected page. Clear
+      // the old session first, then open the real password login page.
+      await signOut({ callbackUrl: loginHref, redirect: true })
+    } catch {
+      window.location.href = loginHref
+    }
+  }
+
   const supportHref = getPlatformUrl('/contact') || 'mailto:support@learnhouse.io'
 
   return (
@@ -118,7 +132,8 @@ export default function ErrorActions({ resolutions, reset, eventId, loginNext }:
             )
           case 'login':
             return (
-              <ActionButton key={kind} href={loginHref} variant="primary" label="Log back in"
+              <ActionButton key={kind} onClick={doLogin} disabled={loggingIn} variant="primary"
+                label={loggingIn ? 'Opening login…' : 'Log back in'}
                 icon={<LogIn size={16} />} />
             )
           case 'home':

@@ -2019,7 +2019,10 @@ async def reset_user_password_admin(
         )
 
     user = await _get_user_in_org(user_id, token_user.org_id, db_session)
-    changed_at = datetime.now(timezone.utc)
+    # PostgreSQL stores this column as TIMESTAMP WITHOUT TIME ZONE. Match the
+    # built-in password-reset service and strip tzinfo before binding it;
+    # asyncpg rejects aware datetimes for this column type.
+    changed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     user.password = security_hash_password(new_password)
     user.password_changed_at = changed_at
     user.failed_login_attempts = 0

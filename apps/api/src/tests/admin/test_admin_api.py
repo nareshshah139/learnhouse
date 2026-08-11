@@ -2160,6 +2160,7 @@ class TestResetUserPasswordAdmin:
         assert result.id == user.id
         assert security_verify_password("NewStrong!Passphrase9", user.password)
         assert user.password_changed_at is not None
+        assert user.password_changed_at.tzinfo is None
         assert user.failed_login_attempts == 0
         assert user.locked_until is None
 

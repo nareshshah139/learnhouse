@@ -1214,6 +1214,29 @@ class TestGetAssignmentsFromCourse:
 
 
 class TestCourseGradeLeaderboard:
+    async def test_learner_route_uuid_without_prefix_loads_gradebook(
+        self,
+        mock_request,
+        db,
+        course,
+        assignment_task,
+        graded_submission,
+        regular_user,
+    ):
+        """The public course URL omits ``course_`` but must use the same data."""
+        learner_route_uuid = course.course_uuid.removeprefix("course_")
+
+        with patch(_PATCH_RBAC, new_callable=AsyncMock), \
+             patch(_PATCH_AUTH_ROLES, new_callable=AsyncMock, return_value=False):
+            result = await get_course_grade_leaderboard(
+                mock_request, learner_route_uuid, regular_user, db
+            )
+
+        assert result["course_uuid"] == course.course_uuid
+        assert result["can_manage"] is False
+        assert result["summary"]["learners"] == 1
+        assert result["gradebook"][0]["user"]["id"] == regular_user.id
+
     async def test_groups_normalized_assignment_and_discussion_grades_by_week(
         self,
         mock_request,

@@ -105,6 +105,16 @@ function cumulativeDetail(row: GradebookRow) {
   return `${row.graded_components}/${row.ranked_components} inputs · ${row.ranked_weeks} ${weekLabel}`
 }
 
+function gradebookErrorDescription(error: unknown) {
+  const status = typeof error === 'object' && error !== null && 'status' in error
+    ? Number((error as { status?: unknown }).status)
+    : undefined
+
+  if (status === 403) return 'You must be enrolled in this course to view its gradebook.'
+  if (status === 404) return 'This course gradebook could not be found. Refresh the course page and try again.'
+  return 'Course grades are temporarily unavailable. Please try again.'
+}
+
 function scoreSortKey(weekNumber: number, component: GradeComponent): SortKey {
   return `week:${weekNumber}:${component}`
 }
@@ -594,7 +604,7 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
           <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
             <AlertCircle className="text-rose-500" size={28} aria-hidden="true" />
             <h3 className="mt-3 text-sm font-semibold text-gray-950">Course grades could not be loaded</h3>
-            <p className="mt-1 max-w-md text-sm text-gray-500">You must be enrolled in this course to view its gradebook.</p>
+            <p className="mt-1 max-w-md text-sm text-gray-500">{gradebookErrorDescription(gradebook.error)}</p>
             <button
               type="button"
               onClick={() => gradebook.refetch()}

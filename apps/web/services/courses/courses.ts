@@ -5,6 +5,7 @@ import {
   errorHandling,
   getResponseMetadata,
 } from '@services/utils/ts/requests'
+import { toCourseResourceUuid } from './courseIdentifiers'
 
 /*
  This file includes only POST, PUT, DELETE requests
@@ -201,8 +202,9 @@ export async function getCourseGradeLeaderboard(
   course_uuid: string,
   access_token: string | null | undefined
 ) {
+  const resourceUuid = toCourseResourceUuid(course_uuid)
   const result: any = await fetch(
-    `${getAPIUrl()}assignments/course/${course_uuid}/leaderboard`,
+    `${getAPIUrl()}assignments/course/${resourceUuid}/leaderboard`,
     RequestBodyWithAuthHeader('GET', null, null, access_token || undefined)
   )
   return await errorHandling(result)
@@ -215,8 +217,9 @@ export async function updateCourseDiscussionGrade(
   score: number,
   access_token: string | null | undefined
 ) {
+  const resourceUuid = toCourseResourceUuid(course_uuid)
   const result: any = await fetch(
-    `${getAPIUrl()}assignments/course/${course_uuid}/discussion-grades/${user_id}/week/${week_number}`,
+    `${getAPIUrl()}assignments/course/${resourceUuid}/discussion-grades/${user_id}/week/${week_number}`,
     RequestBodyWithAuthHeader('PUT', { score, max_score: 100 }, null, access_token || undefined)
   )
   return await errorHandling(result)
@@ -229,8 +232,9 @@ export async function updateCourseGradeWeights(
   discussion_weight: number,
   access_token: string | null | undefined
 ) {
+  const resourceUuid = toCourseResourceUuid(course_uuid)
   const result: any = await fetch(
-    `${getAPIUrl()}assignments/course/${course_uuid}/grade-weights/week/${week_number}`,
+    `${getAPIUrl()}assignments/course/${resourceUuid}/grade-weights/week/${week_number}`,
     RequestBodyWithAuthHeader(
       'PUT',
       { assignment_weight, discussion_weight },

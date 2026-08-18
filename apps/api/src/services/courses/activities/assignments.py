@@ -83,6 +83,16 @@ _DEFAULT_ASSIGNMENT_WEIGHT = 75
 _DEFAULT_DISCUSSION_WEIGHT = 25
 
 
+def _course_resource_uuid(course_uuid: str) -> str:
+    """Return the canonical database UUID used by course resources.
+
+    Learner-facing routes intentionally omit the ``course_`` prefix, while
+    dashboard routes may retain it. Gradebook endpoints are shared by both
+    surfaces, so normalize at the service boundary before querying the course.
+    """
+    return course_uuid if course_uuid.startswith("course_") else f"course_{course_uuid}"
+
+
 def _course_week_grade_weights(course: Course, week_number: int) -> tuple[int, int]:
     """Return a valid Assignment/Discussion percentage split for one week."""
     metadata = course.extra_metadata if isinstance(course.extra_metadata, dict) else {}
@@ -3921,9 +3931,10 @@ async def get_course_grade_leaderboard(
     numeric scores are returned: email addresses and grading feedback never
     leave this endpoint.
     """
+    canonical_course_uuid = _course_resource_uuid(course_uuid)
     course = (
         await db_session.execute(
-            select(Course).where(Course.course_uuid == course_uuid)
+            select(Course).where(Course.course_uuid == canonical_course_uuid)
         )
     ).scalars().first()
 
@@ -4275,9 +4286,10 @@ async def upsert_course_grade_weights(
     db_session: AsyncSession,
 ):
     """Set the Assignment/Discussion percentage split for one course week."""
+    canonical_course_uuid = _course_resource_uuid(course_uuid)
     course = (
         await db_session.execute(
-            select(Course).where(Course.course_uuid == course_uuid)
+            select(Course).where(Course.course_uuid == canonical_course_uuid)
         )
     ).scalars().first()
     if not course:
@@ -4338,9 +4350,10 @@ async def upsert_course_discussion_grade(
     db_session: AsyncSession,
 ):
     """Create or replace one weekly discussion score (course staff only)."""
+    canonical_course_uuid = _course_resource_uuid(course_uuid)
     course = (
         await db_session.execute(
-            select(Course).where(Course.course_uuid == course_uuid)
+            select(Course).where(Course.course_uuid == canonical_course_uuid)
         )
     ).scalars().first()
     if not course:

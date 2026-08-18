@@ -2,7 +2,19 @@
 
 import React, { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, Check, GraduationCap, Pencil, RefreshCw, Search, ShieldCheck } from 'lucide-react'
+import {
+  AlertCircle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Check,
+  GraduationCap,
+  Pencil,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Trophy,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { queryKeys } from '@/lib/query/keys'
@@ -42,15 +54,23 @@ type WeekGrade = {
 type GradebookRow = {
   user: GradebookUser
   weeks: Record<string, WeekGrade>
+  rank: number | null
+  cumulative_percentage: number | null
+  graded_components: number
+  ranked_components: number
 }
 
 type GradebookResponse = {
   course_uuid: string
   can_manage: boolean
   weeks: Array<{ week_number: number; label: string }>
-  summary: { learners: number; weeks: number }
+  summary: { learners: number; weeks: number; ranked_components: number }
   gradebook: GradebookRow[]
 }
+
+type GradeComponent = 'assignment' | 'discussion'
+type SortKey = 'rank' | 'learner' | 'cumulative' | `week:${number}:${GradeComponent}`
+type SortDirection = 'asc' | 'desc'
 
 const formatPercentage = (value: number) => `${value.toFixed(2).replace(/\.00$/, '')}%`
 
@@ -64,6 +84,53 @@ function letterGrade(score: number) {
 
 function learnerName(user: GradebookUser) {
   return `${user.first_name || ''} ${user.last_name || ''}`.trim() || `@${user.username}`
+}
+
+function scoreSortKey(weekNumber: number, component: GradeComponent): SortKey {
+  return `week:${weekNumber}:${component}`
+}
+
+function rowSortValue(row: GradebookRow, sortKey: SortKey): number | string | null {
+  if (sortKey === 'rank') return row.rank
+  if (sortKey === 'learner') return `${learnerName(row.user)} ${row.user.username}`.toLocaleLowerCase()
+  if (sortKey === 'cumulative') return row.cumulative_percentage
+
+  const [, weekNumber, component] = sortKey.split(':') as [string, string, GradeComponent]
+  const week = row.weeks[weekNumber]
+  return component === 'assignment'
+    ? week?.assignment?.percentage ?? null
+    : week?.discussion?.percentage ?? null
+}
+
+function SortButton({
+  label,
+  sortKey,
+  activeSortKey,
+  direction,
+  onSort,
+  centered = false,
+}: {
+  label: string
+  sortKey: SortKey
+  activeSortKey: SortKey
+  direction: SortDirection
+  onSort: (_key: SortKey) => void
+  centered?: boolean
+}) {
+  const active = activeSortKey === sortKey
+  const Icon = active ? (direction === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sortKey)}
+      className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-gray-200/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-1 ${centered ? 'justify-center' : ''}`}
+      aria-label={`Sort by ${label}`}
+    >
+      <span>{label}</span>
+      <Icon size={13} className={active ? 'text-gray-800' : 'text-gray-400'} aria-hidden="true" />
+    </button>
+  )
 }
 
 function LearnerIdentity({ user }: { user: GradebookUser }) {
@@ -200,6 +267,8 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
   const accessToken = session?.data?.tokens?.access_token
   const [searchQuery, setSearchQuery] = useState('')
   const [savingCell, setSavingCell] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('rank')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const queryClient = useQueryClient()
 
   const gradebook = useQuery<GradebookResponse>({
@@ -220,25 +289,53 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
   const rows = useMemo(() => {
     const allRows = gradebook.data?.gradebook ?? []
     const query = searchQuery.trim().toLocaleLowerCase()
-    if (!query) return allRows
-    return allRows.filter((row) =>
-      [learnerName(row.user), row.user.username].join(' ').toLocaleLowerCase().includes(query)
-    )
-  }, [gradebook.data?.gradebook, searchQuery])
+    const filteredRows = query
+      ? allRows.filter((row) =>
+        [learnerName(row.user), row.user.username].join(' ').toLocaleLowerCase().includes(query)
+      )
+      : allRows
+
+    return [...filteredRows].sort((first, second) => {
+      const firstValue = rowSortValue(first, sortKey)
+      const secondValue = rowSortValue(second, sortKey)
+
+      if (firstValue === null && secondValue === null) return learnerName(first.user).localeCompare(learnerName(second.user))
+      if (firstValue === null) return 1
+      if (secondValue === null) return -1
+
+      const comparison = typeof firstValue === 'string' && typeof secondValue === 'string'
+        ? firstValue.localeCompare(secondValue)
+        : Number(firstValue) - Number(secondValue)
+      if (comparison !== 0) return sortDirection === 'asc' ? comparison : -comparison
+
+      const rankComparison = (first.rank ?? Number.MAX_SAFE_INTEGER) - (second.rank ?? Number.MAX_SAFE_INTEGER)
+      if (rankComparison !== 0) return rankComparison
+      return learnerName(first.user).localeCompare(learnerName(second.user))
+    })
+  }, [gradebook.data?.gradebook, searchQuery, sortDirection, sortKey])
 
   const weeks = gradebook.data?.weeks ?? []
   const canManage = gradebook.data?.can_manage ?? false
+
+  const handleSort = (nextSortKey: SortKey) => {
+    if (nextSortKey === sortKey) {
+      setSortDirection((current) => current === 'asc' ? 'desc' : 'asc')
+      return
+    }
+    setSortKey(nextSortKey)
+    setSortDirection(nextSortKey === 'rank' || nextSortKey === 'learner' ? 'asc' : 'desc')
+  }
 
   return (
     <section className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-8 lg:px-10">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="max-w-2xl">
           <h1 className="text-2xl font-semibold tracking-[-0.025em] text-gray-950">
-            {t('dashboard.courses.grades.title', { defaultValue: 'Course gradebook' })}
+            {t('dashboard.courses.grades.leaderboard_title', { defaultValue: 'Course leaderboard' })}
           </h1>
           <p className="mt-2 text-sm leading-6 text-gray-600">
-            {t('dashboard.courses.grades.description', {
-              defaultValue: 'Assignment and discussion results are shown separately for each course week.',
+            {t('dashboard.courses.grades.leaderboard_description', {
+              defaultValue: 'Cumulative ranking with assignment and discussion results shown separately for every course week.',
             })}
           </p>
           <div className="mt-3 flex items-center gap-1.5 text-xs font-medium text-gray-500">
@@ -275,20 +372,54 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
           <div>
             <h2 className="flex items-center gap-2 text-base font-semibold text-gray-950">
               <GraduationCap size={18} className="text-gray-600" aria-hidden="true" />
-              Weekly results
+              Rankings and weekly results
             </h2>
-            <p className="mt-1 text-xs text-gray-500">Scores are not combined into a course-wide aggregate.</p>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-gray-500">
+              Cumulative rank equally weights every weekly column that contains a grade. Missing grades in an active column count as zero.
+            </p>
           </div>
-          <label className="relative block w-full sm:w-72">
-            <span className="sr-only">Search learners</span>
-            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search learners"
-              className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:ring-2 focus:ring-gray-900/10"
-            />
-          </label>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <div className="flex gap-2 md:hidden">
+              <label className="min-w-0 flex-1">
+                <span className="sr-only">Sort leaderboard</span>
+                <select
+                  value={sortKey}
+                  onChange={(event) => handleSort(event.target.value as SortKey)}
+                  className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-base text-gray-900 outline-none focus:border-gray-400 focus:bg-white focus:ring-2 focus:ring-gray-900/10"
+                >
+                  <option value="rank">Rank</option>
+                  <option value="learner">Learner</option>
+                  <option value="cumulative">Cumulative score</option>
+                  {weeks.flatMap((week) => [
+                    <option key={`${week.week_number}:assignment`} value={scoreSortKey(week.week_number, 'assignment')}>
+                      {week.label} assignment
+                    </option>,
+                    <option key={`${week.week_number}:discussion`} value={scoreSortKey(week.week_number, 'discussion')}>
+                      {week.label} discussion
+                    </option>,
+                  ])}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => setSortDirection((current) => current === 'asc' ? 'desc' : 'asc')}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-1"
+                aria-label={`Sort ${sortDirection === 'asc' ? 'descending' : 'ascending'}`}
+              >
+                {sortDirection === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
+              </button>
+            </div>
+            <label className="relative block w-full sm:w-72">
+              <span className="sr-only">Search learners</span>
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search learners"
+                className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:ring-2 focus:ring-gray-900/10"
+              />
+            </label>
+          </div>
         </div>
 
         {gradebook.isLoading ? <GradebookSkeleton /> : null}
@@ -323,10 +454,52 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
         {!gradebook.isLoading && !gradebook.isError && rows.length > 0 ? (
           <>
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full border-separate border-spacing-0" style={{ minWidth: `${280 + weeks.length * 280}px` }}>
+              <table className="w-full border-separate border-spacing-0" style={{ minWidth: `${500 + weeks.length * 280}px` }}>
                 <thead>
                   <tr className="bg-gray-50/90 text-left text-xs font-semibold text-gray-700">
-                    <th rowSpan={2} className="sticky left-0 z-20 w-[280px] border-b border-r border-gray-200 bg-gray-50 px-5 py-3">Learner</th>
+                    <th
+                      rowSpan={2}
+                      scope="col"
+                      aria-sort={sortKey === 'rank' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                      className="sticky left-0 z-30 w-[72px] border-b border-r border-gray-200 bg-gray-50 px-3 py-3 text-center"
+                    >
+                      <SortButton
+                        label="Rank"
+                        sortKey="rank"
+                        activeSortKey={sortKey}
+                        direction={sortDirection}
+                        onSort={handleSort}
+                        centered
+                      />
+                    </th>
+                    <th
+                      rowSpan={2}
+                      scope="col"
+                      aria-sort={sortKey === 'learner' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                      className="sticky left-[72px] z-20 w-[280px] border-b border-r border-gray-200 bg-gray-50 px-4 py-3"
+                    >
+                      <SortButton
+                        label="Learner"
+                        sortKey="learner"
+                        activeSortKey={sortKey}
+                        direction={sortDirection}
+                        onSort={handleSort}
+                      />
+                    </th>
+                    <th
+                      rowSpan={2}
+                      scope="col"
+                      aria-sort={sortKey === 'cumulative' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                      className="w-[148px] border-b border-r border-gray-200 px-3 py-3"
+                    >
+                      <SortButton
+                        label="Cumulative"
+                        sortKey="cumulative"
+                        activeSortKey={sortKey}
+                        direction={sortDirection}
+                        onSort={handleSort}
+                      />
+                    </th>
                     {weeks.map((week) => (
                       <th key={week.week_number} colSpan={2} className="border-b border-r border-gray-200 px-4 py-3 text-center last:border-r-0">
                         {week.label}
@@ -336,8 +509,32 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
                   <tr className="bg-gray-50/70 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-500">
                     {weeks.map((week) => (
                       <React.Fragment key={week.week_number}>
-                        <th className="w-[140px] border-b border-r border-gray-200 px-4 py-2.5">Assignment</th>
-                        <th className="w-[140px] border-b border-r border-gray-200 px-4 py-2.5 last:border-r-0">Discussion</th>
+                        <th
+                          scope="col"
+                          aria-sort={sortKey === scoreSortKey(week.week_number, 'assignment') ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                          className="w-[140px] border-b border-r border-gray-200 px-2.5 py-2"
+                        >
+                          <SortButton
+                            label="Assignment"
+                            sortKey={scoreSortKey(week.week_number, 'assignment')}
+                            activeSortKey={sortKey}
+                            direction={sortDirection}
+                            onSort={handleSort}
+                          />
+                        </th>
+                        <th
+                          scope="col"
+                          aria-sort={sortKey === scoreSortKey(week.week_number, 'discussion') ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                          className="w-[140px] border-b border-r border-gray-200 px-2.5 py-2 last:border-r-0"
+                        >
+                          <SortButton
+                            label="Discussion"
+                            sortKey={scoreSortKey(week.week_number, 'discussion')}
+                            activeSortKey={sortKey}
+                            direction={sortDirection}
+                            onSort={handleSort}
+                          />
+                        </th>
                       </React.Fragment>
                     ))}
                   </tr>
@@ -345,8 +542,19 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.user.id} className="group hover:bg-gray-50/60">
-                      <td className="sticky left-0 z-10 border-b border-r border-gray-100 bg-white px-5 py-4 group-hover:bg-gray-50">
+                      <td className="sticky left-0 z-20 border-b border-r border-gray-100 bg-white px-3 py-4 text-center group-hover:bg-gray-50">
+                        <span className="inline-flex min-w-9 items-center justify-center rounded-lg bg-gray-100 px-2 py-1 text-sm font-semibold tabular-nums text-gray-800">
+                          {row.rank ? `#${row.rank}` : '—'}
+                        </span>
+                      </td>
+                      <td className="sticky left-[72px] z-10 border-b border-r border-gray-100 bg-white px-4 py-4 group-hover:bg-gray-50">
                         <LearnerIdentity user={row.user} />
+                      </td>
+                      <td className="border-b border-r border-gray-100 px-3 py-4">
+                        <GradeValue
+                          percentage={row.cumulative_percentage}
+                          detail={`${row.graded_components}/${row.ranked_components} scores`}
+                        />
                       </td>
                       {weeks.map((week) => {
                         const weekGrade = row.weeks[String(week.week_number)]
@@ -386,7 +594,24 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
             <div className="divide-y divide-gray-100 md:hidden">
               {rows.map((row) => (
                 <article key={row.user.id} className="px-4 py-5">
-                  <LearnerIdentity user={row.user} />
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="mb-2 text-xs font-semibold tabular-nums text-gray-500">
+                        {row.rank ? `Rank #${row.rank}` : 'Not ranked'}
+                      </p>
+                      <LearnerIdentity user={row.user} />
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="mb-1 flex items-center justify-end gap-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                        <Trophy size={12} aria-hidden="true" />
+                        Cumulative
+                      </p>
+                      <GradeValue
+                        percentage={row.cumulative_percentage}
+                        detail={`${row.graded_components}/${row.ranked_components} scores`}
+                      />
+                    </div>
+                  </div>
                   <div className="mt-4 space-y-3">
                     {weeks.map((week) => {
                       const weekGrade = row.weeks[String(week.week_number)]

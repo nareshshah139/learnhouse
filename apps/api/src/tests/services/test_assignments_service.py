@@ -1334,13 +1334,24 @@ class TestCourseGradeLeaderboard:
 
         rbac.assert_awaited_once()
         assert result["can_manage"] is True
-        assert result["summary"] == {"learners": 2, "weeks": 1}
+        assert result["summary"] == {
+            "learners": 2,
+            "weeks": 1,
+            "ranked_components": 2,
+        }
         assert result["weeks"] == [{"week_number": 1, "label": "Week 1"}]
         assert [row["user"]["username"] for row in result["gradebook"]] == [
-            "regular",
             "second-learner",
+            "regular",
         ]
-        regular_week = result["gradebook"][0]["weeks"]["1"]
+        second_result, regular_result = result["gradebook"]
+        assert second_result["cumulative_percentage"] == 89.0
+        assert second_result["rank"] == 1
+        assert regular_result["cumulative_percentage"] == 40.0
+        assert regular_result["rank"] == 2
+        assert regular_result["graded_components"] == 2
+        assert regular_result["ranked_components"] == 2
+        regular_week = regular_result["weeks"]["1"]
         assert regular_week["assignment"] == {
             "percentage": 80.0,
             "graded_count": 2,
@@ -1348,8 +1359,8 @@ class TestCourseGradeLeaderboard:
             "status": "graded",
         }
         assert regular_week["discussion"]["percentage"] == 0.0
-        assert result["gradebook"][1]["weeks"]["1"]["discussion"]["percentage"] == 88.0
-        assert "email" not in result["gradebook"][0]["user"]
+        assert second_result["weeks"]["1"]["discussion"]["percentage"] == 88.0
+        assert "email" not in second_result["user"]
 
     async def test_enrolled_learner_can_view_full_gradebook_read_only(
         self,
@@ -1359,6 +1370,7 @@ class TestCourseGradeLeaderboard:
         course,
         activity,
         assignment,
+        assignment_task,
         graded_submission,
         regular_user,
     ):
@@ -1424,6 +1436,65 @@ class TestCourseGradeLeaderboard:
             regular_user.id,
             classmate.id,
         }
+        assert result["summary"]["ranked_components"] == 1
+        assert result["gradebook"][0]["user"]["id"] == classmate.id
+        assert result["gradebook"][0]["cumulative_percentage"] == 92.0
+        assert result["gradebook"][0]["rank"] == 1
+        assert result["gradebook"][1]["cumulative_percentage"] == 85.0
+        assert result["gradebook"][1]["rank"] == 2
+
+    async def test_missing_active_component_counts_as_zero_and_ties_share_rank(
+        self,
+        mock_request,
+        db,
+        course,
+        assignment,
+        assignment_task,
+        graded_submission,
+        admin_user,
+        regular_user,
+    ):
+        discussion_only_learner = User(
+            id=3,
+            username="discussion-only",
+            first_name="Discussion",
+            last_name="Only",
+            email="discussion-only@example.com",
+            password="hashed_password",
+            user_uuid="user_discussion_only",
+            creation_date=str(datetime.now()),
+            update_date=str(datetime.now()),
+        )
+        discussion_grade = CourseDiscussionGrade(
+            course_id=course.id,
+            user_id=discussion_only_learner.id,
+            week_number=1,
+            score=85,
+            max_score=100,
+            graded_by_id=admin_user.id,
+            creation_date=str(datetime.now()),
+            update_date=str(datetime.now()),
+        )
+        db.add_all([discussion_only_learner, discussion_grade])
+        await db.commit()
+
+        with patch(_PATCH_RBAC, new_callable=AsyncMock), \
+             patch(_PATCH_AUTH_ROLES, new_callable=AsyncMock, return_value=True):
+            result = await get_course_grade_leaderboard(
+                mock_request, course.course_uuid, admin_user, db
+            )
+
+        assert result["summary"]["ranked_components"] == 2
+        assert [row["cumulative_percentage"] for row in result["gradebook"]] == [
+            42.5,
+            42.5,
+        ]
+        assert [row["rank"] for row in result["gradebook"]] == [1, 1]
+        by_username = {
+            row["user"]["username"]: row for row in result["gradebook"]
+        }
+        assert by_username["regular"]["graded_components"] == 1
+        assert by_username["discussion-only"]["graded_components"] == 1
 
     async def test_non_enrolled_viewer_is_denied(
         self, mock_request, db, course, admin_user

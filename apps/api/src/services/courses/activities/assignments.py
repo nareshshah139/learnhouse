@@ -4100,6 +4100,49 @@ async def get_course_grade_leaderboard(
             }
         gradebook.append(learner)
 
+    week_numbers = sorted(
+        set(week_by_assignment.values())
+        | {int(grade.week_number) for grade, _user in discussion_rows}
+    )
+
+    # A weekly column joins the cumulative leaderboard after at least one score
+    # exists in it. That keeps unreleased future weeks neutral while ensuring a
+    # missing learner score in an active column counts as zero for everyone.
+    active_components: list[tuple[int, str]] = []
+    for week_number in week_numbers:
+        week_key = str(week_number)
+        if any(
+            learner["weeks"].get(week_key, {}).get("assignment", {}).get("status")
+            == "graded"
+            for learner in gradebook
+        ):
+            active_components.append((week_number, "assignment"))
+        if any(
+            learner["weeks"].get(week_key, {}).get("discussion") is not None
+            for learner in gradebook
+        ):
+            active_components.append((week_number, "discussion"))
+
+    ranked_component_count = len(active_components)
+    for learner in gradebook:
+        cumulative_total = 0.0
+        graded_components = 0
+        for week_number, component in active_components:
+            week = learner["weeks"].get(str(week_number), {})
+            grade = week.get(component)
+            percentage = grade.get("percentage") if grade else None
+            if percentage is not None:
+                cumulative_total += float(percentage)
+                graded_components += 1
+
+        learner["cumulative_percentage"] = (
+            round(cumulative_total / ranked_component_count, 2)
+            if ranked_component_count
+            else None
+        )
+        learner["graded_components"] = graded_components
+        learner["ranked_components"] = ranked_component_count
+
     def learner_name(row: dict) -> str:
         user = row["user"]
         return (
@@ -4107,11 +4150,26 @@ async def get_course_grade_leaderboard(
             or user["username"]
         ).casefold()
 
-    gradebook.sort(key=lambda row: (learner_name(row), row["user"]["id"]))
-    week_numbers = sorted(
-        set(week_by_assignment.values())
-        | {int(grade.week_number) for grade, _user in discussion_rows}
+    gradebook.sort(
+        key=lambda row: (
+            row["cumulative_percentage"] is None,
+            -(row["cumulative_percentage"] or 0),
+            learner_name(row),
+            row["user"]["id"],
+        )
     )
+
+    previous_score: float | None = None
+    previous_rank: int | None = None
+    for position, learner in enumerate(gradebook, start=1):
+        score = learner["cumulative_percentage"]
+        if score is None:
+            learner["rank"] = None
+            continue
+        if previous_score is None or score != previous_score:
+            previous_rank = position
+            previous_score = score
+        learner["rank"] = previous_rank
 
     return {
         "course_uuid": course.course_uuid,
@@ -4123,6 +4181,7 @@ async def get_course_grade_leaderboard(
         "summary": {
             "learners": len(gradebook),
             "weeks": len(week_numbers),
+            "ranked_components": ranked_component_count,
         },
         "gradebook": gradebook,
     }

@@ -6,6 +6,8 @@ import React, { useEffect, useState, useRef, useMemo, memo } from 'react'
 import { getCourseThumbnailMediaDirectory } from '@services/media/media'
 import { useOrg } from '@components/Contexts/OrgContext'
 import { useTranslation } from 'react-i18next'
+import AuthenticatedClientElement from '@components/Security/AuthenticatedClientElement'
+import CourseGradesLink from '@components/Pages/Courses/CourseGradesLink'
 
 interface FixedActivitySecondaryBarProps {
   course: any
@@ -207,7 +209,14 @@ export default function FixedActivitySecondaryBar(props: FixedActivitySecondaryB
         <div className="flex items-center justify-between h-16 py-2">
           <CourseInfo course={props.course} org={org} />
           
-          <div className="flex items-center flex-shrink-0">
+          <div className="flex items-center flex-shrink-0 gap-1 sm:gap-2">
+            <AuthenticatedClientElement checkMethod="authentication">
+              <CourseGradesLink
+                orgslug={props.orgslug}
+                courseuuid={props.course.course_uuid}
+                variant="icon"
+              />
+            </AuthenticatedClientElement>
             <NavigationButtons
               prevActivity={prevActivity}
               nextActivity={nextActivity}
@@ -220,4 +229,4 @@ export default function FixedActivitySecondaryBar(props: FixedActivitySecondaryB
       </div>
     </div>
   );
-} 
+}

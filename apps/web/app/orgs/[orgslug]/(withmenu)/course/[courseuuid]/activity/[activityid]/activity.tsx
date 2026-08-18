@@ -41,6 +41,7 @@ import ActivityIndicators from '@components/Pages/Courses/ActivityIndicators'
 import UserAvatar from '@components/Objects/UserAvatar'
 import { useTranslation } from 'react-i18next'
 import { useLHAnalytics, AnalyticsEvent } from '@services/analytics'
+import CourseGradesLink from '@components/Pages/Courses/CourseGradesLink'
 
 const ReactConfetti = dynamic(() => import('react-confetti'), { ssr: false })
 
@@ -643,6 +644,13 @@ function ActivityClient(props: ActivityClientProps) {
                           transition={{ delay: 0.2 }}
                           className="flex items-center space-x-2"
                         >
+                          <AuthenticatedClientElement checkMethod="authentication">
+                            <CourseGradesLink
+                              orgslug={orgslug}
+                              courseuuid={courseuuid}
+                              variant="icon"
+                            />
+                          </AuthenticatedClientElement>
                           {activity && (
                             <div className="hidden sm:block">
                               <ActivityShareDropdown
@@ -826,18 +834,27 @@ function ActivityClient(props: ActivityClientProps) {
                               </h1>
                             </div>
                           </div>
-                          {activity && (
-                            <div className="hidden sm:block">
-                              <ActivityShareDropdown
-                                activityName={activity.name}
-                                activityUrl={typeof window !== 'undefined' ? window.location.href : ''}
+                          <div className="flex items-center gap-2 self-end sm:self-auto">
+                            <AuthenticatedClientElement checkMethod="authentication">
+                              <CourseGradesLink
                                 orgslug={orgslug}
-                                courseUuid={course.course_uuid}
-                                activityId={activity.activity_uuid ? activity.activity_uuid.replace('activity_', '') : activityid.replace('activity_', '')}
-                                activityType={activity.activity_type}
+                                courseuuid={courseuuid}
+                                variant="toolbar"
                               />
-                            </div>
-                          )}
+                            </AuthenticatedClientElement>
+                            {activity && (
+                              <div className="hidden sm:block">
+                                <ActivityShareDropdown
+                                  activityName={activity.name}
+                                  activityUrl={typeof window !== 'undefined' ? window.location.href : ''}
+                                  orgslug={orgslug}
+                                  courseUuid={course.course_uuid}
+                                  activityId={activity.activity_uuid ? activity.activity_uuid.replace('activity_', '') : activityid.replace('activity_', '')}
+                                  activityType={activity.activity_type}
+                                />
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         <ActivityIndicators

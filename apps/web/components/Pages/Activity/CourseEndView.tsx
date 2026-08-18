@@ -17,6 +17,7 @@ import {
   CERTIFICATE_CAPTURE_WIDTH,
 } from '@services/courses/certificateDownload';
 import { useTranslation } from 'react-i18next';
+import CourseGradesLink from '@components/Pages/Courses/CourseGradesLink';
 
 interface CourseEndViewProps {
   courseName: string;
@@ -329,7 +330,14 @@ const CourseEndView: React.FC<CourseEndViewProps> = ({
             </div>
           )}
 
-          <div className="pt-6">
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-6">
+            {session?.data?.tokens?.access_token ? (
+              <CourseGradesLink
+                orgslug={orgslug}
+                courseuuid={courseUuid}
+                variant="toolbar"
+              />
+            ) : null}
             <Link
               href={getUriWithOrg(orgslug, `/course/${courseUuid.replace('course_', '')}`)}
               className="inline-flex items-center space-x-2 bg-gray-800 text-white px-6 py-3 rounded-full hover:bg-gray-700 transition duration-200"
@@ -404,7 +412,14 @@ const CourseEndView: React.FC<CourseEndViewProps> = ({
             {t('courses.keep_going_description')}
           </p>
 
-          <div className="pt-6">
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-6">
+            {session?.data?.tokens?.access_token ? (
+              <CourseGradesLink
+                orgslug={orgslug}
+                courseuuid={courseUuid}
+                variant="toolbar"
+              />
+            ) : null}
             <Link
               href={getUriWithOrg(orgslug, `/course/${courseUuid.replace('course_', '')}`)}
               className="inline-flex items-center space-x-2 bg-blue-600 text-white px-6 py-3 rounded-full hover:bg-blue-700 transition duration-200"
@@ -419,4 +434,4 @@ const CourseEndView: React.FC<CourseEndViewProps> = ({
   }
 };
 
-export default CourseEndView; 
+export default CourseEndView;

@@ -24,6 +24,7 @@ from src.services.courses.activities.assignments import (
     delete_assignment_task,
     delete_assignment_task_submission,
     get_assignments_from_course,
+    get_course_grade_leaderboard,
     get_grade_assignment_submission,
     grade_assignment_submission,
     handle_assignment_task_submission,
@@ -851,6 +852,31 @@ async def api_submission_mark_as_done(
 
     return await mark_activity_as_done_for_user(
         request, user_id, assignment_uuid, current_user, db_session
+    )
+
+
+@router.get(
+    "/course/{course_uuid}/leaderboard",
+    summary="Get course grade leaderboard",
+    description=(
+        "Return normalized learner grade averages for a course. Only course "
+        "graders and organization administrators may access this endpoint."
+    ),
+    responses={
+        200: {"description": "Course grade leaderboard."},
+        401: {"description": "Authentication required"},
+        403: {"description": "User lacks permission to view course-wide grades"},
+        404: {"description": "Course not found"},
+    },
+)
+async def api_get_course_grade_leaderboard(
+    request: Request,
+    course_uuid: str,
+    current_user: PublicUser = Depends(get_current_user),
+    db_session=Depends(get_db_session),
+):
+    return await get_course_grade_leaderboard(
+        request, course_uuid, current_user, db_session
     )
 
 

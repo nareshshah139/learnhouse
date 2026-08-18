@@ -196,3 +196,14 @@ export async function getCourseRights(course_uuid: string, access_token: string 
   const res = await errorHandling(result)
   return res
 }
+
+export async function getCourseGradeLeaderboard(
+  course_uuid: string,
+  access_token: string | null | undefined
+) {
+  const result: any = await fetch(
+    `${getAPIUrl()}assignments/course/${course_uuid}/leaderboard`,
+    RequestBodyWithAuthHeader('GET', null, null, access_token || undefined)
+  )
+  return await errorHandling(result)
+}

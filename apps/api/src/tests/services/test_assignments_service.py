@@ -11,6 +11,7 @@ Session to AsyncSession in this PR:
   update_assignment_submission, delete_assignment_submission,
   grade_assignment_submission, get_grade_assignment_submission,
   mark_activity_as_done_for_user, get_assignments_from_course,
+  get_course_grade_leaderboard,
   _block_api_tokens.
 """
 
@@ -46,7 +47,7 @@ from src.db.courses.certifications import CertificateUser, Certifications
 from src.db.trail_runs import TrailRun
 from src.db.trail_steps import TrailStep
 from src.db.trails import Trail
-from src.db.users import APITokenUser
+from src.db.users import APITokenUser, User
 from src.services.courses.activities.assignments import (
     _block_api_tokens,
     _check_number_answer,
@@ -60,6 +61,7 @@ from src.services.courses.activities.assignments import (
     delete_assignment_task,
     delete_assignment_task_submission,
     get_assignments_from_course,
+    get_course_grade_leaderboard,
     get_grade_assignment_submission,
     grade_assignment_submission,
     handle_assignment_task_submission,
@@ -1206,6 +1208,126 @@ class TestGetAssignmentsFromCourse:
         assert isinstance(result, list)
         assert len(result) == 1
         assert result[0].assignment_uuid == assignment.assignment_uuid
+
+
+class TestCourseGradeLeaderboard:
+    async def test_normalizes_scales_ranks_learners_and_excludes_pii(
+        self,
+        mock_request,
+        db,
+        org,
+        course,
+        chapter,
+        activity,
+        assignment,
+        assignment_task,
+        graded_submission,
+        admin_user,
+        regular_user,
+    ):
+        second_learner = User(
+            id=3,
+            username="second-learner",
+            first_name="Second",
+            last_name="Learner",
+            email="second@example.com",
+            password="hashed_password",
+            user_uuid="user_second_learner",
+            creation_date=str(datetime.now()),
+            update_date=str(datetime.now()),
+        )
+        second_assignment = Assignment(
+            id=11,
+            title="Scaled Assignment",
+            description="Uses a different point scale",
+            due_date="2030-01-02",
+            published=True,
+            grading_type=GradingTypeEnum.NUMERIC,
+            org_id=org.id,
+            course_id=course.id,
+            chapter_id=chapter.id,
+            activity_id=activity.id,
+            assignment_uuid="assignment_scaled",
+            creation_date=str(datetime.now()),
+            update_date=str(datetime.now()),
+        )
+        second_task = AssignmentTask(
+            id=21,
+            title="Scaled Task",
+            description="Two hundred point task",
+            hint="",
+            reference_file=None,
+            assignment_type=AssignmentTaskTypeEnum.OTHER,
+            contents={},
+            max_grade_value=200,
+            assignment_id=second_assignment.id,
+            org_id=org.id,
+            course_id=course.id,
+            chapter_id=chapter.id,
+            activity_id=activity.id,
+            assignment_task_uuid="assignmenttask_scaled",
+            creation_date=str(datetime.now()),
+            update_date=str(datetime.now()),
+        )
+        regular_second_grade = AssignmentUserSubmission(
+            id=32,
+            user_id=regular_user.id,
+            assignment_id=second_assignment.id,
+            grade=150,
+            submission_status=AssignmentUserSubmissionStatus.GRADED,
+            assignmentusersubmission_uuid="aus_regular_scaled",
+            creation_date=str(datetime.now()),
+            update_date=str(datetime.now()),
+        )
+        second_learner_grade = AssignmentUserSubmission(
+            id=33,
+            user_id=second_learner.id,
+            assignment_id=assignment.id,
+            grade=90,
+            submission_status=AssignmentUserSubmissionStatus.GRADED,
+            assignmentusersubmission_uuid="aus_second_learner",
+            creation_date=str(datetime.now()),
+            update_date=str(datetime.now()),
+        )
+        db.add_all(
+            [
+                second_learner,
+                second_assignment,
+                second_task,
+                regular_second_grade,
+                second_learner_grade,
+            ]
+        )
+        await db.commit()
+
+        with patch(_PATCH_RBAC, new_callable=AsyncMock) as rbac:
+            result = await get_course_grade_leaderboard(
+                mock_request, course.course_uuid, admin_user, db
+            )
+
+        rbac.assert_awaited_once()
+        assert result["summary"] == {
+            "learners": 2,
+            "course_average_percentage": 85.0,
+            "top_score_percentage": 90.0,
+            "graded_submissions": 3,
+            "course_assignments": 2,
+        }
+        assert [row["rank"] for row in result["rankings"]] == [1, 2]
+        assert result["rankings"][0]["average_percentage"] == 90.0
+        assert result["rankings"][1]["average_percentage"] == 80.0
+        assert result["rankings"][1]["graded_assignments"] == 2
+        assert result["rankings"][1]["assigned_assignments"] == 2
+        assert "email" not in result["rankings"][0]["user"]
+
+    async def test_returns_404_for_unknown_course(
+        self, mock_request, db, admin_user
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await get_course_grade_leaderboard(
+                mock_request, "course_missing", admin_user, db
+            )
+        assert exc.value.status_code == 404
 
 
 # ---------------------------------------------------------------------------

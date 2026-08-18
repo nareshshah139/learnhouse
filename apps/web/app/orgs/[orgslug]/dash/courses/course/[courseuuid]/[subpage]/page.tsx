@@ -3,7 +3,7 @@ import React, { use, useEffect } from 'react';
 import { CourseProvider } from '../../../../../../../../components/Contexts/CourseContext'
 import { CourseOverviewTop } from '@components/Dashboard/Misc/CourseOverviewTop'
 import { motion } from 'motion/react'
-import { GalleryVerticalEnd, Globe, Info, UserPen, Award, Lock, Search } from 'lucide-react'
+import { GalleryVerticalEnd, Globe, Info, UserPen, Award, Lock, Search, Trophy } from 'lucide-react'
 import { ChartBar } from '@phosphor-icons/react'
 import EditCourseStructure from '@components/Dashboard/Pages/Course/EditCourseStructure/EditCourseStructure'
 import EditCourseGeneral from '@components/Dashboard/Pages/Course/EditCourseGeneral/EditCourseGeneral'
@@ -19,6 +19,7 @@ import { PlanLevel } from '@services/plans/plans';
 import FeatureGate from '@components/Dashboard/Shared/FeatureGate/FeatureGate';
 import CourseAnalyticsTab from '@components/Dashboard/Analytics/Course/CourseAnalyticsTab';
 import { DashTabBar, DashTabItem } from '@components/Dashboard/Shared/DashTabBar/DashTabBar';
+import CourseGradesLeaderboard from '@components/Dashboard/Pages/Course/CourseGradesLeaderboard/CourseGradesLeaderboard';
 
 export type CourseOverviewParams = {
   orgslug: string
@@ -84,6 +85,13 @@ function CourseOverviewPage(props: { params: Promise<CourseOverviewParams> }) {
       href: `/dash/courses/course/${params.courseuuid}/certification`,
       requiredPermission: 'create_certifications' as const,
       requiresPlan: 'pro' as PlanLevel
+    },
+    {
+      key: 'grades',
+      label: t('dashboard.courses.settings.tabs.grades', { defaultValue: 'Grades' }),
+      icon: Trophy,
+      href: `/dash/courses/course/${params.courseuuid}/grades`,
+      requiredPermission: 'grade_assignments' as const
     },
     {
       key: 'analytics',
@@ -201,6 +209,9 @@ function CourseOverviewPage(props: { params: Promise<CourseOverviewParams> }) {
               <FeatureGate feature="course_analytics">
                 <CourseAnalyticsTab courseUUID={courseuuid} />
               </FeatureGate>
+            ) : null}
+            {!rightsLoading && params.subpage == 'grades' && hasPermission('grade_assignments') ? (
+              <CourseGradesLeaderboard courseUUID={courseuuid} />
             ) : null}
           </div>
         </motion.div>

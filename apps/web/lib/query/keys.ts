@@ -17,6 +17,7 @@ export const queryKeys = {
     contributors: (uuid: string) => ['course', uuid, 'contributors'] as const,
     updates: (uuid: string) => ['course', uuid, 'updates'] as const,
     rights: (uuid: string) => ['course', uuid, 'rights'] as const,
+    gradeLeaderboard: (uuid: string) => ['course', uuid, 'grade-leaderboard'] as const,
   },
   activity: {
     detail: (uuid: string) => ['activity', uuid] as const,

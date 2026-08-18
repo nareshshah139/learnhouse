@@ -3870,3 +3870,186 @@ async def get_assignments_from_course(
 
     # return assignments read
     return [AssignmentRead.model_validate(assignment) for assignment in assignments]
+
+
+async def get_course_grade_leaderboard(
+    request: Request,
+    course_uuid: str,
+    current_user: PublicUser | AnonymousUser | APITokenUser,
+    db_session: AsyncSession,
+):
+    """Return a normalized, instructor-only grade leaderboard for a course.
+
+    ``AssignmentUserSubmission.grade`` stores raw task points, while each
+    assignment can use a different task scale.  Ranking raw values would make
+    an 8,500/10,000 submission look better than a 95/100 submission, so every
+    graded assignment is normalized to a percentage before learner averages
+    are calculated.
+
+    Only public profile fields are returned.  Email addresses and feedback are
+    deliberately excluded because this endpoint exposes course-wide grade data.
+    """
+    course = (
+        await db_session.execute(
+            select(Course).where(Course.course_uuid == course_uuid)
+        )
+    ).scalars().first()
+
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    # Course-wide grades are instructor data.  READ access is insufficient:
+    # learners who can view the course must never be able to enumerate peers'
+    # scores.  This mirrors the permission used by manual grading.
+    await authorize_assignment_access(
+        request,
+        db_session,
+        current_user,
+        course.course_uuid,
+        AccessAction.UPDATE,
+        token_action="read",
+    )
+
+    assignment_ids = [
+        assignment_id
+        for assignment_id in (
+            await db_session.execute(
+                select(Assignment.id).where(Assignment.course_id == course.id)
+            )
+        ).scalars().all()
+        if assignment_id is not None
+    ]
+
+    empty_summary = {
+        "learners": 0,
+        "course_average_percentage": 0.0,
+        "top_score_percentage": 0.0,
+        "graded_submissions": 0,
+        "course_assignments": len(assignment_ids),
+    }
+    if not assignment_ids:
+        return {
+            "course_uuid": course.course_uuid,
+            "summary": empty_summary,
+            "rankings": [],
+        }
+
+    task_rows = (
+        await db_session.execute(
+            select(AssignmentTask.assignment_id, AssignmentTask.max_grade_value)
+            .where(AssignmentTask.assignment_id.in_(assignment_ids))  # type: ignore[attr-defined]
+        )
+    ).all()
+    max_points_by_assignment: dict[int, int] = {}
+    for assignment_id, max_grade_value in task_rows:
+        max_points_by_assignment[assignment_id] = (
+            max_points_by_assignment.get(assignment_id, 0)
+            + max(int(max_grade_value or 0), 0)
+        )
+
+    submission_rows = (
+        await db_session.execute(
+            select(AssignmentUserSubmission, User)
+            .join(User, User.id == AssignmentUserSubmission.user_id)  # type: ignore[arg-type]
+            .where(AssignmentUserSubmission.assignment_id.in_(assignment_ids))  # type: ignore[attr-defined]
+        )
+    ).all()
+
+    by_user: dict[int, dict] = {}
+    for submission, user in submission_rows:
+        learner = by_user.setdefault(
+            int(user.id),
+            {
+                "user": {
+                    "id": int(user.id),
+                    "user_uuid": user.user_uuid,
+                    "username": user.username,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "avatar_image": user.avatar_image or "",
+                },
+                "assigned_assignments": 0,
+                "graded_assignments": 0,
+                "percentage_total": 0.0,
+            },
+        )
+        learner["assigned_assignments"] += 1
+
+        if submission.submission_status != AssignmentUserSubmissionStatus.GRADED:
+            continue
+
+        max_points = max_points_by_assignment.get(submission.assignment_id, 0)
+        if max_points <= 0:
+            continue
+
+        raw_percentage = (float(submission.grade or 0) / max_points) * 100.0
+        learner["percentage_total"] += max(min(raw_percentage, 100.0), 0.0)
+        learner["graded_assignments"] += 1
+
+    rankings = []
+    for learner in by_user.values():
+        if learner["graded_assignments"] == 0:
+            continue
+        graded_count = learner["graded_assignments"]
+        assigned_count = learner["assigned_assignments"]
+        rankings.append(
+            {
+                "user": learner["user"],
+                "average_percentage": round(
+                    learner["percentage_total"] / graded_count, 2
+                ),
+                "graded_assignments": graded_count,
+                "assigned_assignments": assigned_count,
+                "coverage_percentage": round(
+                    (graded_count / assigned_count) * 100.0, 2
+                ),
+            }
+        )
+
+    def learner_name(row: dict) -> str:
+        user = row["user"]
+        return (
+            f"{user['first_name']} {user['last_name']}".strip()
+            or user["username"]
+        ).casefold()
+
+    rankings.sort(
+        key=lambda row: (
+            -row["average_percentage"],
+            -row["graded_assignments"],
+            learner_name(row),
+            row["user"]["id"],
+        )
+    )
+
+    previous_score: float | None = None
+    previous_rank = 0
+    for index, row in enumerate(rankings):
+        score = row["average_percentage"]
+        if previous_score is None or score != previous_score:
+            previous_rank = index + 1
+            previous_score = score
+        row["rank"] = previous_rank
+
+    learner_count = len(rankings)
+    course_average = (
+        round(
+            sum(row["average_percentage"] for row in rankings) / learner_count,
+            2,
+        )
+        if learner_count
+        else 0.0
+    )
+    summary = {
+        "learners": learner_count,
+        "course_average_percentage": course_average,
+        "top_score_percentage": rankings[0]["average_percentage"] if rankings else 0.0,
+        "graded_submissions": sum(row["graded_assignments"] for row in rankings),
+        "course_assignments": len(assignment_ids),
+    }
+
+    return {
+        "course_uuid": course.course_uuid,
+        "summary": summary,
+        "rankings": rankings,
+    }

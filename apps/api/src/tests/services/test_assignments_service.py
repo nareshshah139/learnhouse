@@ -86,6 +86,7 @@ from src.services.courses.activities.assignments import (
     update_assignment_task,
     update_assignment_task_submission,
     upsert_course_discussion_grade,
+    upsert_course_grade_weights,
 )
 
 # ---------------------------------------------------------------------------
@@ -1338,16 +1339,24 @@ class TestCourseGradeLeaderboard:
             "learners": 2,
             "weeks": 1,
             "ranked_components": 2,
+            "ranked_weeks": 1,
         }
-        assert result["weeks"] == [{"week_number": 1, "label": "Week 1"}]
+        assert result["weeks"] == [
+            {
+                "week_number": 1,
+                "label": "Week 1",
+                "assignment_weight": 75,
+                "discussion_weight": 25,
+            }
+        ]
         assert [row["user"]["username"] for row in result["gradebook"]] == [
             "second-learner",
             "regular",
         ]
         second_result, regular_result = result["gradebook"]
-        assert second_result["cumulative_percentage"] == 89.0
+        assert second_result["cumulative_percentage"] == 89.5
         assert second_result["rank"] == 1
-        assert regular_result["cumulative_percentage"] == 40.0
+        assert regular_result["cumulative_percentage"] == 60.0
         assert regular_result["rank"] == 2
         assert regular_result["graded_components"] == 2
         assert regular_result["ranked_components"] == 2
@@ -1430,13 +1439,21 @@ class TestCourseGradeLeaderboard:
             )
 
         assert result["can_manage"] is False
-        assert result["weeks"] == [{"week_number": 1, "label": "Week 1"}]
+        assert result["weeks"] == [
+            {
+                "week_number": 1,
+                "label": "Week 1",
+                "assignment_weight": 75,
+                "discussion_weight": 25,
+            }
+        ]
         assert len(result["gradebook"]) == 2
         assert {row["user"]["id"] for row in result["gradebook"]} == {
             regular_user.id,
             classmate.id,
         }
         assert result["summary"]["ranked_components"] == 1
+        assert result["summary"]["ranked_weeks"] == 1
         assert result["gradebook"][0]["user"]["id"] == classmate.id
         assert result["gradebook"][0]["cumulative_percentage"] == 92.0
         assert result["gradebook"][0]["rank"] == 1
@@ -1469,13 +1486,14 @@ class TestCourseGradeLeaderboard:
             course_id=course.id,
             user_id=discussion_only_learner.id,
             week_number=1,
-            score=85,
+            score=75,
             max_score=100,
             graded_by_id=admin_user.id,
             creation_date=str(datetime.now()),
             update_date=str(datetime.now()),
         )
-        db.add_all([discussion_only_learner, discussion_grade])
+        graded_submission.grade = 25
+        db.add_all([graded_submission, discussion_only_learner, discussion_grade])
         await db.commit()
 
         with patch(_PATCH_RBAC, new_callable=AsyncMock), \
@@ -1486,8 +1504,8 @@ class TestCourseGradeLeaderboard:
 
         assert result["summary"]["ranked_components"] == 2
         assert [row["cumulative_percentage"] for row in result["gradebook"]] == [
-            42.5,
-            42.5,
+            18.75,
+            18.75,
         ]
         assert [row["rank"] for row in result["gradebook"]] == [1, 1]
         by_username = {
@@ -1495,6 +1513,80 @@ class TestCourseGradeLeaderboard:
         }
         assert by_username["regular"]["graded_components"] == 1
         assert by_username["discussion-only"]["graded_components"] == 1
+
+    async def test_staff_can_set_week_specific_grade_weights(
+        self,
+        mock_request,
+        db,
+        course,
+        assignment_task,
+        graded_submission,
+        admin_user,
+        regular_user,
+    ):
+        discussion_grade = CourseDiscussionGrade(
+            course_id=course.id,
+            user_id=regular_user.id,
+            week_number=2,
+            score=50,
+            max_score=100,
+            graded_by_id=admin_user.id,
+            creation_date=str(datetime.now()),
+            update_date=str(datetime.now()),
+        )
+        db.add(discussion_grade)
+        await db.commit()
+
+        with patch(_PATCH_RBAC, new_callable=AsyncMock):
+            result = await upsert_course_grade_weights(
+                mock_request,
+                course.course_uuid,
+                2,
+                60,
+                40,
+                admin_user,
+                db,
+            )
+
+        assert result == {
+            "week_number": 2,
+            "assignment_weight": 60,
+            "discussion_weight": 40,
+        }
+        await db.refresh(course)
+        assert course.extra_metadata["gradebook_weights"]["2"] == {
+            "assignment": 60,
+            "discussion": 40,
+        }
+
+        with patch(_PATCH_RBAC, new_callable=AsyncMock), \
+             patch(_PATCH_AUTH_ROLES, new_callable=AsyncMock, return_value=True):
+            leaderboard = await get_course_grade_leaderboard(
+                mock_request, course.course_uuid, admin_user, db
+            )
+
+        # Week 1 contains the 85% assignment. Week 2 contains only discussion,
+        # so its configured 40% is normalized while Assignment remains inactive.
+        assert leaderboard["gradebook"][0]["cumulative_percentage"] == 67.5
+        assert leaderboard["weeks"][1]["assignment_weight"] == 60
+        assert leaderboard["weeks"][1]["discussion_weight"] == 40
+
+    async def test_week_specific_grade_weights_must_total_100(
+        self, mock_request, db, course, admin_user
+    ):
+        with patch(_PATCH_RBAC, new_callable=AsyncMock):
+            with pytest.raises(HTTPException) as exc:
+                await upsert_course_grade_weights(
+                    mock_request,
+                    course.course_uuid,
+                    1,
+                    75,
+                    30,
+                    admin_user,
+                    db,
+                )
+
+        assert exc.value.status_code == 422
 
     async def test_non_enrolled_viewer_is_denied(
         self, mock_request, db, course, admin_user

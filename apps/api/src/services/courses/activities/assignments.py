@@ -78,6 +78,39 @@ from src.services.webhooks.dispatch import dispatch_webhooks
 
 # Hard caps for regex answer-matching (defense-in-depth alongside the timeout).
 _REGEX_MAX_LEN = 1000
+
+_DEFAULT_ASSIGNMENT_WEIGHT = 75
+_DEFAULT_DISCUSSION_WEIGHT = 25
+
+
+def _course_week_grade_weights(course: Course, week_number: int) -> tuple[int, int]:
+    """Return a valid Assignment/Discussion percentage split for one week."""
+    metadata = course.extra_metadata if isinstance(course.extra_metadata, dict) else {}
+    gradebook_weights = metadata.get("gradebook_weights", {})
+    week_weights = (
+        gradebook_weights.get(str(week_number), {})
+        if isinstance(gradebook_weights, dict)
+        else {}
+    )
+    try:
+        assignment_weight = int(
+            week_weights.get("assignment", _DEFAULT_ASSIGNMENT_WEIGHT)
+        )
+        discussion_weight = int(
+            week_weights.get("discussion", _DEFAULT_DISCUSSION_WEIGHT)
+        )
+    except (TypeError, ValueError):
+        return _DEFAULT_ASSIGNMENT_WEIGHT, _DEFAULT_DISCUSSION_WEIGHT
+
+    if (
+        assignment_weight < 0
+        or discussion_weight < 0
+        or assignment_weight + discussion_weight != 100
+    ):
+        return _DEFAULT_ASSIGNMENT_WEIGHT, _DEFAULT_DISCUSSION_WEIGHT
+    return assignment_weight, discussion_weight
+
+
 _REGEX_TIMEOUT_SECONDS = 0.5
 
 # Thousands-grouped numbers, used to disambiguate comma-as-thousands from
@@ -4105,43 +4138,78 @@ async def get_course_grade_leaderboard(
         | {int(grade.week_number) for grade, _user in discussion_rows}
     )
 
-    # A weekly column joins the cumulative leaderboard after at least one score
-    # exists in it. That keeps unreleased future weeks neutral while ensuring a
-    # missing learner score in an active column counts as zero for everyone.
-    active_components: list[tuple[int, str]] = []
+    # Each week has its own Assignment/Discussion split. A component becomes
+    # active after at least one score exists in that column; inactive components
+    # are ignored and the remaining weights are normalized within the week.
+    week_ranking_config: dict[int, dict] = {}
     for week_number in week_numbers:
         week_key = str(week_number)
-        if any(
+        assignment_active = any(
             learner["weeks"].get(week_key, {}).get("assignment", {}).get("status")
             == "graded"
             for learner in gradebook
-        ):
-            active_components.append((week_number, "assignment"))
-        if any(
+        )
+        discussion_active = any(
             learner["weeks"].get(week_key, {}).get("discussion") is not None
             for learner in gradebook
-        ):
-            active_components.append((week_number, "discussion"))
+        )
+        assignment_weight, discussion_weight = _course_week_grade_weights(
+            course, week_number
+        )
+        active_weight = (
+            (assignment_weight if assignment_active else 0)
+            + (discussion_weight if discussion_active else 0)
+        )
+        week_ranking_config[week_number] = {
+            "assignment_weight": assignment_weight,
+            "discussion_weight": discussion_weight,
+            "assignment_active": assignment_active,
+            "discussion_active": discussion_active,
+            "active_weight": active_weight,
+        }
 
-    ranked_component_count = len(active_components)
+    ranked_component_count = sum(
+        int(config["assignment_active"] and config["assignment_weight"] > 0)
+        + int(config["discussion_active"] and config["discussion_weight"] > 0)
+        for config in week_ranking_config.values()
+    )
+    ranked_week_count = sum(
+        1 for config in week_ranking_config.values() if config["active_weight"] > 0
+    )
     for learner in gradebook:
         cumulative_total = 0.0
         graded_components = 0
-        for week_number, component in active_components:
+        for week_number, config in week_ranking_config.items():
             week = learner["weeks"].get(str(week_number), {})
-            grade = week.get(component)
-            percentage = grade.get("percentage") if grade else None
-            if percentage is not None:
-                cumulative_total += float(percentage)
-                graded_components += 1
+            weighted_total = 0.0
+            for component in ("assignment", "discussion"):
+                active = config[f"{component}_active"]
+                weight = config[f"{component}_weight"]
+                if not active or weight <= 0:
+                    continue
+                grade = week.get(component)
+                percentage = grade.get("percentage") if grade else None
+                if percentage is not None:
+                    weighted_total += float(percentage) * weight
+                    graded_components += 1
+
+            active_weight = config["active_weight"]
+            weighted_percentage = (
+                round(weighted_total / active_weight, 2) if active_weight else None
+            )
+            if week:
+                week["weighted_percentage"] = weighted_percentage
+            if weighted_percentage is not None:
+                cumulative_total += weighted_percentage
 
         learner["cumulative_percentage"] = (
-            round(cumulative_total / ranked_component_count, 2)
-            if ranked_component_count
+            round(cumulative_total / ranked_week_count, 2)
+            if ranked_week_count
             else None
         )
         learner["graded_components"] = graded_components
         learner["ranked_components"] = ranked_component_count
+        learner["ranked_weeks"] = ranked_week_count
 
     def learner_name(row: dict) -> str:
         user = row["user"]
@@ -4175,15 +4243,87 @@ async def get_course_grade_leaderboard(
         "course_uuid": course.course_uuid,
         "can_manage": can_manage,
         "weeks": [
-            {"week_number": week_number, "label": f"Week {week_number}"}
+            {
+                "week_number": week_number,
+                "label": f"Week {week_number}",
+                "assignment_weight": week_ranking_config[week_number][
+                    "assignment_weight"
+                ],
+                "discussion_weight": week_ranking_config[week_number][
+                    "discussion_weight"
+                ],
+            }
             for week_number in week_numbers
         ],
         "summary": {
             "learners": len(gradebook),
             "weeks": len(week_numbers),
             "ranked_components": ranked_component_count,
+            "ranked_weeks": ranked_week_count,
         },
         "gradebook": gradebook,
+    }
+
+
+async def upsert_course_grade_weights(
+    request: Request,
+    course_uuid: str,
+    week_number: int,
+    assignment_weight: int,
+    discussion_weight: int,
+    current_user: PublicUser | AnonymousUser | APITokenUser,
+    db_session: AsyncSession,
+):
+    """Set the Assignment/Discussion percentage split for one course week."""
+    course = (
+        await db_session.execute(
+            select(Course).where(Course.course_uuid == course_uuid)
+        )
+    ).scalars().first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    await authorize_assignment_access(
+        request,
+        db_session,
+        current_user,
+        course.course_uuid,
+        AccessAction.UPDATE,
+        token_action="update",
+    )
+
+    if (
+        week_number < 1
+        or assignment_weight < 0
+        or discussion_weight < 0
+        or assignment_weight > 100
+        or discussion_weight > 100
+        or assignment_weight + discussion_weight != 100
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Assignment and discussion weights must total 100%",
+        )
+
+    metadata = copy.deepcopy(course.extra_metadata or {})
+    gradebook_weights = metadata.get("gradebook_weights")
+    if not isinstance(gradebook_weights, dict):
+        gradebook_weights = {}
+        metadata["gradebook_weights"] = gradebook_weights
+    gradebook_weights[str(week_number)] = {
+        "assignment": assignment_weight,
+        "discussion": discussion_weight,
+    }
+    course.extra_metadata = metadata
+    course.update_date = str(datetime.now())
+    db_session.add(course)
+    await db_session.commit()
+    await db_session.refresh(course)
+
+    return {
+        "week_number": week_number,
+        "assignment_weight": assignment_weight,
+        "discussion_weight": discussion_weight,
     }
 
 

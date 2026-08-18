@@ -12,6 +12,7 @@ import {
   Pencil,
   RefreshCw,
   Search,
+  SlidersHorizontal,
   ShieldCheck,
   Trophy,
 } from 'lucide-react'
@@ -20,7 +21,11 @@ import { useTranslation } from 'react-i18next'
 import { queryKeys } from '@/lib/query/keys'
 import { useLHSession } from '@components/Contexts/LHSessionContext'
 import UserAvatar from '@components/Objects/UserAvatar'
-import { getCourseGradeLeaderboard, updateCourseDiscussionGrade } from '@services/courses/courses'
+import {
+  getCourseGradeLeaderboard,
+  updateCourseDiscussionGrade,
+  updateCourseGradeWeights,
+} from '@services/courses/courses'
 import { getUserAvatarMediaDirectory } from '@services/media/media'
 
 type GradebookUser = {
@@ -49,6 +54,14 @@ type DiscussionGrade = {
 type WeekGrade = {
   assignment: AssignmentGrade
   discussion: DiscussionGrade | null
+  weighted_percentage?: number | null
+}
+
+type GradebookWeek = {
+  week_number: number
+  label: string
+  assignment_weight: number
+  discussion_weight: number
 }
 
 type GradebookRow = {
@@ -58,13 +71,14 @@ type GradebookRow = {
   cumulative_percentage: number | null
   graded_components: number
   ranked_components: number
+  ranked_weeks: number
 }
 
 type GradebookResponse = {
   course_uuid: string
   can_manage: boolean
-  weeks: Array<{ week_number: number; label: string }>
-  summary: { learners: number; weeks: number; ranked_components: number }
+  weeks: GradebookWeek[]
+  summary: { learners: number; weeks: number; ranked_components: number; ranked_weeks: number }
   gradebook: GradebookRow[]
 }
 
@@ -84,6 +98,11 @@ function letterGrade(score: number) {
 
 function learnerName(user: GradebookUser) {
   return `${user.first_name || ''} ${user.last_name || ''}`.trim() || `@${user.username}`
+}
+
+function cumulativeDetail(row: GradebookRow) {
+  const weekLabel = row.ranked_weeks === 1 ? 'week' : 'weeks'
+  return `${row.graded_components}/${row.ranked_components} inputs · ${row.ranked_weeks} ${weekLabel}`
 }
 
 function scoreSortKey(weekNumber: number, component: GradeComponent): SortKey {
@@ -109,6 +128,7 @@ function SortButton({
   direction,
   onSort,
   centered = false,
+  ariaLabel,
 }: {
   label: string
   sortKey: SortKey
@@ -116,6 +136,7 @@ function SortButton({
   direction: SortDirection
   onSort: (_key: SortKey) => void
   centered?: boolean
+  ariaLabel?: string
 }) {
   const active = activeSortKey === sortKey
   const Icon = active ? (direction === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown
@@ -125,7 +146,7 @@ function SortButton({
       type="button"
       onClick={() => onSort(sortKey)}
       className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-gray-200/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-1 ${centered ? 'justify-center' : ''}`}
-      aria-label={`Sort by ${label}`}
+      aria-label={ariaLabel ?? `Sort by ${label}`}
     >
       <span>{label}</span>
       <Icon size={13} className={active ? 'text-gray-800' : 'text-gray-400'} aria-hidden="true" />
@@ -243,6 +264,103 @@ function DiscussionGradeEditor({
   )
 }
 
+function WeekWeightControl({
+  week,
+  canManage,
+  isSaving,
+  onSave,
+}: {
+  week: GradebookWeek
+  canManage: boolean
+  isSaving: boolean
+  onSave: (_assignmentWeight: number, _discussionWeight: number) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [discussionWeight, setDiscussionWeight] = useState(String(week.discussion_weight))
+  const numericDiscussionWeight = Number(discussionWeight)
+  const valid = discussionWeight.trim() !== ''
+    && Number.isInteger(numericDiscussionWeight)
+    && numericDiscussionWeight >= 0
+    && numericDiscussionWeight <= 100
+  const assignmentWeight = valid ? 100 - numericDiscussionWeight : week.assignment_weight
+
+  if (!editing) {
+    const content = (
+      <>
+        <span className="font-semibold text-gray-800">{week.label}</span>
+        <span className="text-gray-500">Assignment {week.assignment_weight}%</span>
+        <span className="text-gray-300" aria-hidden="true">·</span>
+        <span className="text-gray-500">Discussion {week.discussion_weight}%</span>
+        {canManage ? (
+          isSaving
+            ? <RefreshCw size={12} className="animate-spin text-gray-400" aria-hidden="true" />
+            : <Pencil size={12} className="text-gray-400" aria-hidden="true" />
+        ) : null}
+      </>
+    )
+
+    return canManage ? (
+      <button
+        type="button"
+        disabled={isSaving}
+        onClick={() => {
+          setDiscussionWeight(String(week.discussion_weight))
+          setEditing(true)
+        }}
+        className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs transition-colors hover:border-gray-300 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-1 disabled:cursor-wait disabled:opacity-60"
+        aria-label={`Edit ${week.label} weighting`}
+      >
+        {content}
+      </button>
+    ) : (
+      <div className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs">
+        {content}
+      </div>
+    )
+  }
+
+  const save = () => {
+    if (!valid) return
+    onSave(assignmentWeight, numericDiscussionWeight)
+    setEditing(false)
+  }
+
+  return (
+    <div className="flex min-h-9 flex-wrap items-center gap-2 rounded-xl border border-gray-300 bg-white px-2.5 py-1.5 text-xs">
+      <span className="font-semibold text-gray-800">{week.label}</span>
+      <span className="text-gray-500">Assignment {assignmentWeight}%</span>
+      <label className="flex items-center gap-1.5 text-gray-600">
+        Discussion
+        <input
+          type="number"
+          min={0}
+          max={100}
+          step={1}
+          value={discussionWeight}
+          onChange={(event) => setDiscussionWeight(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') setEditing(false)
+            if (event.key === 'Enter') save()
+          }}
+          autoFocus
+          className="h-8 w-16 rounded-lg border border-gray-300 bg-white px-2 text-base tabular-nums text-gray-950 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-900/10"
+          aria-label={`${week.label} discussion weight percentage`}
+        />
+        %
+      </label>
+      <button
+        type="button"
+        disabled={!valid || isSaving}
+        onClick={save}
+        className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gray-950 text-white hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40"
+        aria-label={`Save ${week.label} weighting`}
+      >
+        <Check size={14} />
+      </button>
+    </div>
+  )
+}
+
 function GradebookSkeleton() {
   return (
     <div className="space-y-3 p-5" aria-label="Loading course grades">
@@ -267,6 +385,7 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
   const accessToken = session?.data?.tokens?.access_token
   const [searchQuery, setSearchQuery] = useState('')
   const [savingCell, setSavingCell] = useState('')
+  const [savingWeight, setSavingWeight] = useState<number | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('rank')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const queryClient = useQueryClient()
@@ -284,6 +403,27 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
     onMutate: ({ userId, weekNumber }) => setSavingCell(`${userId}:${weekNumber}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.courses.gradeLeaderboard(courseUUID) }),
     onSettled: () => setSavingCell(''),
+  })
+
+  const weightMutation = useMutation({
+    mutationFn: ({
+      weekNumber,
+      assignmentWeight,
+      discussionWeight,
+    }: {
+      weekNumber: number
+      assignmentWeight: number
+      discussionWeight: number
+    }) => updateCourseGradeWeights(
+      courseUUID,
+      weekNumber,
+      assignmentWeight,
+      discussionWeight,
+      accessToken
+    ),
+    onMutate: ({ weekNumber }) => setSavingWeight(weekNumber),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.courses.gradeLeaderboard(courseUUID) }),
+    onSettled: () => setSavingWeight(null),
   })
 
   const rows = useMemo(() => {
@@ -375,8 +515,34 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
               Rankings and weekly results
             </h2>
             <p className="mt-1 max-w-2xl text-xs leading-5 text-gray-500">
-              Cumulative rank equally weights every weekly column that contains a grade. Missing grades in an active column count as zero.
+              Cumulative rank averages each week&apos;s weighted score. Missing grades in an active column count as zero.
             </p>
+            {weeks.length > 0 ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Weekly grade weighting">
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                  <SlidersHorizontal size={14} aria-hidden="true" />
+                  Weighting
+                </span>
+                {weeks.map((week) => (
+                  <WeekWeightControl
+                    key={week.week_number}
+                    week={week}
+                    canManage={canManage}
+                    isSaving={savingWeight === week.week_number}
+                    onSave={(assignmentWeight, discussionWeight) => weightMutation.mutate({
+                      weekNumber: week.week_number,
+                      assignmentWeight,
+                      discussionWeight,
+                    })}
+                  />
+                ))}
+              </div>
+            ) : null}
+            {weightMutation.isError ? (
+              <p className="mt-2 text-xs font-medium text-rose-600" role="alert">
+                The weekly weighting could not be saved. Please try again.
+              </p>
+            ) : null}
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <div className="flex gap-2 md:hidden">
@@ -515,11 +681,12 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
                           className="w-[140px] border-b border-r border-gray-200 px-2.5 py-2"
                         >
                           <SortButton
-                            label="Assignment"
+                            label={`Assignment ${week.assignment_weight}%`}
                             sortKey={scoreSortKey(week.week_number, 'assignment')}
                             activeSortKey={sortKey}
                             direction={sortDirection}
                             onSort={handleSort}
+                            ariaLabel={`Sort by ${week.label} assignment score`}
                           />
                         </th>
                         <th
@@ -528,11 +695,12 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
                           className="w-[140px] border-b border-r border-gray-200 px-2.5 py-2 last:border-r-0"
                         >
                           <SortButton
-                            label="Discussion"
+                            label={`Discussion ${week.discussion_weight}%`}
                             sortKey={scoreSortKey(week.week_number, 'discussion')}
                             activeSortKey={sortKey}
                             direction={sortDirection}
                             onSort={handleSort}
+                            ariaLabel={`Sort by ${week.label} discussion score`}
                           />
                         </th>
                       </React.Fragment>
@@ -553,7 +721,7 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
                       <td className="border-b border-r border-gray-100 px-3 py-4">
                         <GradeValue
                           percentage={row.cumulative_percentage}
-                          detail={`${row.graded_components}/${row.ranked_components} scores`}
+                          detail={cumulativeDetail(row)}
                         />
                       </td>
                       {weeks.map((week) => {
@@ -608,7 +776,7 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
                       </p>
                       <GradeValue
                         percentage={row.cumulative_percentage}
-                        detail={`${row.graded_components}/${row.ranked_components} scores`}
+                        detail={cumulativeDetail(row)}
                       />
                     </div>
                   </div>
@@ -621,11 +789,15 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
                           <h3 className="border-b border-gray-100 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-700">{week.label}</h3>
                           <div className="grid grid-cols-2 divide-x divide-gray-100">
                             <div className="min-w-0 p-3">
-                              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Assignment</p>
+                              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                                Assignment · {week.assignment_weight}%
+                              </p>
                               <GradeValue percentage={weekGrade?.assignment?.percentage} />
                             </div>
                             <div className="min-w-0 p-3">
-                              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Discussion</p>
+                              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                                Discussion · {week.discussion_weight}%
+                              </p>
                               {canManage ? (
                                 <DiscussionGradeEditor
                                   grade={discussion}

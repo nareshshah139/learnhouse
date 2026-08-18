@@ -221,3 +221,22 @@ export async function updateCourseDiscussionGrade(
   )
   return await errorHandling(result)
 }
+
+export async function updateCourseGradeWeights(
+  course_uuid: string,
+  week_number: number,
+  assignment_weight: number,
+  discussion_weight: number,
+  access_token: string | null | undefined
+) {
+  const result: any = await fetch(
+    `${getAPIUrl()}assignments/course/${course_uuid}/grade-weights/week/${week_number}`,
+    RequestBodyWithAuthHeader(
+      'PUT',
+      { assignment_weight, discussion_weight },
+      null,
+      access_token || undefined
+    )
+  )
+  return await errorHandling(result)
+}

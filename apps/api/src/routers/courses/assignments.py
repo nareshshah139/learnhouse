@@ -46,6 +46,7 @@ from src.services.courses.activities.assignments import (
     update_assignment,
     update_assignment_submission,
     update_assignment_task,
+    upsert_course_grade_weights,
     upsert_course_discussion_grade,
 )
 
@@ -60,6 +61,11 @@ class GradeSubmissionBody(BaseModel):
 class DiscussionGradeBody(BaseModel):
     score: int = Field(ge=0, le=10_000)
     max_score: int = Field(default=100, ge=1, le=10_000)
+
+
+class CourseGradeWeightsBody(BaseModel):
+    assignment_weight: int = Field(ge=0, le=100)
+    discussion_weight: int = Field(ge=0, le=100)
 
 
 router = APIRouter()
@@ -883,6 +889,40 @@ async def api_get_course_grade_leaderboard(
 ):
     return await get_course_grade_leaderboard(
         request, course_uuid, current_user, db_session
+    )
+
+
+@router.put(
+    "/course/{course_uuid}/grade-weights/week/{week_number}",
+    summary="Set weekly course grade weights",
+    description=(
+        "Set the Assignment/Discussion percentage split for one course week. "
+        "The two weights must total 100. Course graders only."
+    ),
+    responses={
+        200: {"description": "Weekly grade weights saved."},
+        401: {"description": "Authentication required"},
+        403: {"description": "User lacks permission to configure this course"},
+        404: {"description": "Course not found"},
+        422: {"description": "Invalid weights"},
+    },
+)
+async def api_upsert_course_grade_weights(
+    request: Request,
+    course_uuid: str,
+    week_number: int,
+    body: CourseGradeWeightsBody,
+    current_user: PublicUser = Depends(get_current_user),
+    db_session=Depends(get_db_session),
+):
+    return await upsert_course_grade_weights(
+        request,
+        course_uuid,
+        week_number,
+        body.assignment_weight,
+        body.discussion_weight,
+        current_user,
+        db_session,
     )
 
 

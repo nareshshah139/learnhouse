@@ -4176,7 +4176,15 @@ async def upsert_course_discussion_grade(
                 )
             )
         ).scalars().first()
-    if learner_submission is None:
+    learner_run = (
+        await db_session.execute(
+            select(TrailRun.id).where(
+                TrailRun.course_id == course.id,
+                TrailRun.user_id == user_id,
+            )
+        )
+    ).scalars().first()
+    if learner_submission is None and learner_run is None:
         raise HTTPException(status_code=404, detail="Course learner not found")
 
     grade = (

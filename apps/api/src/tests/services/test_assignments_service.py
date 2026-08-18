@@ -1500,6 +1500,32 @@ class TestCourseGradeLeaderboard:
                 )
         assert exc.value.status_code == 422
 
+    async def test_staff_can_grade_enrolled_learner_without_assignment_row(
+        self,
+        mock_request,
+        db,
+        org,
+        course,
+        activity,
+        admin_user,
+        regular_user,
+    ):
+        await _make_trail(db, org.id, course.id, activity.id, regular_user.id)
+        with patch(_PATCH_RBAC, new_callable=AsyncMock):
+            result = await upsert_course_discussion_grade(
+                mock_request,
+                course.course_uuid,
+                regular_user.id,
+                1,
+                0,
+                100,
+                admin_user,
+                db,
+            )
+
+        assert result["score"] == 0
+        assert result["percentage"] == 0.0
+
     async def test_returns_404_for_unknown_course(
         self, mock_request, db, admin_user
     ):

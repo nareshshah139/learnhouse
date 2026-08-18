@@ -44,6 +44,7 @@ from src.db.courses.assignments import (
     GradingTypeEnum,
 )
 from src.db.courses.certifications import CertificateUser, Certifications
+from src.db.courses.course_discussion_grades import CourseDiscussionGrade
 from src.db.trail_runs import TrailRun
 from src.db.trail_steps import TrailStep
 from src.db.trails import Trail
@@ -84,6 +85,7 @@ from src.services.courses.activities.assignments import (
     update_assignment_submission,
     update_assignment_task,
     update_assignment_task_submission,
+    upsert_course_discussion_grade,
 )
 
 # ---------------------------------------------------------------------------
@@ -1211,7 +1213,7 @@ class TestGetAssignmentsFromCourse:
 
 
 class TestCourseGradeLeaderboard:
-    async def test_normalizes_scales_ranks_learners_and_excludes_pii(
+    async def test_groups_normalized_assignment_and_discussion_grades_by_week(
         self,
         mock_request,
         db,
@@ -1225,6 +1227,8 @@ class TestCourseGradeLeaderboard:
         admin_user,
         regular_user,
     ):
+        assignment.title = "Week 1 assignment"
+        db.add(assignment)
         second_learner = User(
             id=3,
             username="second-learner",
@@ -1238,7 +1242,7 @@ class TestCourseGradeLeaderboard:
         )
         second_assignment = Assignment(
             id=11,
-            title="Scaled Assignment",
+            title="Week 1 scaled assignment",
             description="Uses a different point scale",
             due_date="2030-01-02",
             published=True,
@@ -1289,6 +1293,26 @@ class TestCourseGradeLeaderboard:
             creation_date=str(datetime.now()),
             update_date=str(datetime.now()),
         )
+        regular_discussion_grade = CourseDiscussionGrade(
+            course_id=course.id,
+            user_id=regular_user.id,
+            week_number=1,
+            score=0,
+            max_score=100,
+            graded_by_id=admin_user.id,
+            creation_date=str(datetime.now()),
+            update_date=str(datetime.now()),
+        )
+        second_discussion_grade = CourseDiscussionGrade(
+            course_id=course.id,
+            user_id=second_learner.id,
+            week_number=1,
+            score=88,
+            max_score=100,
+            graded_by_id=admin_user.id,
+            creation_date=str(datetime.now()),
+            update_date=str(datetime.now()),
+        )
         db.add_all(
             [
                 second_learner,
@@ -1296,29 +1320,185 @@ class TestCourseGradeLeaderboard:
                 second_task,
                 regular_second_grade,
                 second_learner_grade,
+                regular_discussion_grade,
+                second_discussion_grade,
             ]
         )
         await db.commit()
 
-        with patch(_PATCH_RBAC, new_callable=AsyncMock) as rbac:
+        with patch(_PATCH_RBAC, new_callable=AsyncMock) as rbac, \
+             patch(_PATCH_AUTH_ROLES, new_callable=AsyncMock, return_value=True):
             result = await get_course_grade_leaderboard(
                 mock_request, course.course_uuid, admin_user, db
             )
 
         rbac.assert_awaited_once()
-        assert result["summary"] == {
-            "learners": 2,
-            "course_average_percentage": 85.0,
-            "top_score_percentage": 90.0,
-            "graded_submissions": 3,
-            "course_assignments": 2,
+        assert result["can_manage"] is True
+        assert result["summary"] == {"learners": 2, "weeks": 1}
+        assert result["weeks"] == [{"week_number": 1, "label": "Week 1"}]
+        assert [row["user"]["username"] for row in result["gradebook"]] == [
+            "regular",
+            "second-learner",
+        ]
+        regular_week = result["gradebook"][0]["weeks"]["1"]
+        assert regular_week["assignment"] == {
+            "percentage": 80.0,
+            "graded_count": 2,
+            "assigned_count": 2,
+            "status": "graded",
         }
-        assert [row["rank"] for row in result["rankings"]] == [1, 2]
-        assert result["rankings"][0]["average_percentage"] == 90.0
-        assert result["rankings"][1]["average_percentage"] == 80.0
-        assert result["rankings"][1]["graded_assignments"] == 2
-        assert result["rankings"][1]["assigned_assignments"] == 2
-        assert "email" not in result["rankings"][0]["user"]
+        assert regular_week["discussion"]["percentage"] == 0.0
+        assert result["gradebook"][1]["weeks"]["1"]["discussion"]["percentage"] == 88.0
+        assert "email" not in result["gradebook"][0]["user"]
+
+    async def test_enrolled_learner_can_view_full_gradebook_read_only(
+        self,
+        mock_request,
+        db,
+        org,
+        course,
+        activity,
+        assignment,
+        graded_submission,
+        regular_user,
+    ):
+        classmate = User(
+            id=3,
+            username="classmate",
+            first_name="Class",
+            last_name="Mate",
+            email="classmate@example.com",
+            password="hashed_password",
+            user_uuid="user_classmate_gradebook",
+            creation_date=str(datetime.now()),
+            update_date=str(datetime.now()),
+        )
+        classmate_submission = AssignmentUserSubmission(
+            id=98,
+            user_id=classmate.id,
+            assignment_id=assignment.id,
+            grade=92,
+            submission_status=AssignmentUserSubmissionStatus.GRADED,
+            assignmentusersubmission_uuid="aus_classmate_gradebook",
+            creation_date=str(datetime.now()),
+            update_date=str(datetime.now()),
+        )
+        draft_assignment = Assignment(
+            id=12,
+            title="Week 2 draft assignment",
+            description="Not released",
+            due_date="2030-01-02",
+            published=False,
+            grading_type=GradingTypeEnum.NUMERIC,
+            org_id=org.id,
+            course_id=course.id,
+            chapter_id=assignment.chapter_id,
+            activity_id=assignment.activity_id,
+            assignment_uuid="assignment_week_2_draft",
+            creation_date=str(datetime.now()),
+            update_date=str(datetime.now()),
+        )
+        draft_submission = AssignmentUserSubmission(
+            id=99,
+            user_id=regular_user.id,
+            assignment_id=draft_assignment.id,
+            grade=100,
+            submission_status=AssignmentUserSubmissionStatus.GRADED,
+            assignmentusersubmission_uuid="aus_week_2_draft",
+            creation_date=str(datetime.now()),
+            update_date=str(datetime.now()),
+        )
+        db.add_all([classmate, classmate_submission, draft_assignment, draft_submission])
+        await db.commit()
+        await _make_trail(db, org.id, course.id, activity.id, regular_user.id)
+        with patch(_PATCH_RBAC, new_callable=AsyncMock), \
+             patch(_PATCH_AUTH_ROLES, new_callable=AsyncMock, return_value=False):
+            result = await get_course_grade_leaderboard(
+                mock_request, course.course_uuid, regular_user, db
+            )
+
+        assert result["can_manage"] is False
+        assert result["weeks"] == [{"week_number": 1, "label": "Week 1"}]
+        assert len(result["gradebook"]) == 2
+        assert {row["user"]["id"] for row in result["gradebook"]} == {
+            regular_user.id,
+            classmate.id,
+        }
+
+    async def test_non_enrolled_viewer_is_denied(
+        self, mock_request, db, course, admin_user
+    ):
+        with patch(_PATCH_RBAC, new_callable=AsyncMock), \
+             patch(_PATCH_AUTH_ROLES, new_callable=AsyncMock, return_value=False):
+            with pytest.raises(HTTPException) as exc:
+                await get_course_grade_leaderboard(
+                    mock_request, course.course_uuid, admin_user, db
+                )
+        assert exc.value.status_code == 403
+
+    async def test_staff_can_create_and_replace_discussion_grade(
+        self,
+        mock_request,
+        db,
+        course,
+        assignment,
+        graded_submission,
+        admin_user,
+        regular_user,
+    ):
+        with patch(_PATCH_RBAC, new_callable=AsyncMock):
+            created = await upsert_course_discussion_grade(
+                mock_request,
+                course.course_uuid,
+                regular_user.id,
+                1,
+                97,
+                100,
+                admin_user,
+                db,
+            )
+            replaced = await upsert_course_discussion_grade(
+                mock_request,
+                course.course_uuid,
+                regular_user.id,
+                1,
+                88,
+                100,
+                admin_user,
+                db,
+            )
+
+        assert created["percentage"] == 97.0
+        assert replaced["percentage"] == 88.0
+        rows = list(
+            (
+                await db.execute(
+                    select(CourseDiscussionGrade).where(
+                        CourseDiscussionGrade.course_id == course.id,
+                        CourseDiscussionGrade.user_id == regular_user.id,
+                    )
+                )
+            ).scalars().all()
+        )
+        assert len(rows) == 1
+        assert rows[0].score == 88
+
+    async def test_discussion_grade_rejects_score_above_maximum(
+        self, mock_request, db, course, admin_user, regular_user
+    ):
+        with patch(_PATCH_RBAC, new_callable=AsyncMock):
+            with pytest.raises(HTTPException) as exc:
+                await upsert_course_discussion_grade(
+                    mock_request,
+                    course.course_uuid,
+                    regular_user.id,
+                    1,
+                    101,
+                    100,
+                    admin_user,
+                    db,
+                )
+        assert exc.value.status_code == 422
 
     async def test_returns_404_for_unknown_course(
         self, mock_request, db, admin_user

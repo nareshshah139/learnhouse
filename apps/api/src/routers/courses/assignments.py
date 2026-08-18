@@ -1,7 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request, UploadFile, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from src.db.courses.assignments import (
     AssignmentCreate,
     AssignmentRead,
@@ -46,6 +46,7 @@ from src.services.courses.activities.assignments import (
     update_assignment,
     update_assignment_submission,
     update_assignment_task,
+    upsert_course_discussion_grade,
 )
 
 
@@ -54,6 +55,11 @@ class GradeSubmissionBody(BaseModel):
     an overall feedback note at the same time they finalize the grade."""
 
     overall_feedback: Optional[str] = None
+
+
+class DiscussionGradeBody(BaseModel):
+    score: int = Field(ge=0, le=10_000)
+    max_score: int = Field(default=100, ge=1, le=10_000)
 
 
 router = APIRouter()
@@ -857,10 +863,10 @@ async def api_submission_mark_as_done(
 
 @router.get(
     "/course/{course_uuid}/leaderboard",
-    summary="Get course grade leaderboard",
+    summary="Get weekly course gradebook",
     description=(
-        "Return normalized learner grade averages for a course. Only course "
-        "graders and organization administrators may access this endpoint."
+        "Return assignment and discussion grades grouped by week. Enrolled "
+        "learners may view the full gradebook; only course graders may edit it."
     ),
     responses={
         200: {"description": "Course grade leaderboard."},
@@ -877,6 +883,39 @@ async def api_get_course_grade_leaderboard(
 ):
     return await get_course_grade_leaderboard(
         request, course_uuid, current_user, db_session
+    )
+
+
+@router.put(
+    "/course/{course_uuid}/discussion-grades/{user_id}/week/{week_number}",
+    summary="Set a weekly discussion grade",
+    description="Create or replace one learner's discussion score. Course graders only.",
+    responses={
+        200: {"description": "Discussion grade saved."},
+        401: {"description": "Authentication required"},
+        403: {"description": "User lacks permission to grade this course"},
+        404: {"description": "Course or learner not found"},
+        422: {"description": "Invalid score"},
+    },
+)
+async def api_upsert_course_discussion_grade(
+    request: Request,
+    course_uuid: str,
+    user_id: int,
+    week_number: int,
+    body: DiscussionGradeBody,
+    current_user: PublicUser = Depends(get_current_user),
+    db_session=Depends(get_db_session),
+):
+    return await upsert_course_discussion_grade(
+        request,
+        course_uuid,
+        user_id,
+        week_number,
+        body.score,
+        body.max_score,
+        current_user,
+        db_session,
     )
 
 

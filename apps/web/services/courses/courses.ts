@@ -207,3 +207,17 @@ export async function getCourseGradeLeaderboard(
   )
   return await errorHandling(result)
 }
+
+export async function updateCourseDiscussionGrade(
+  course_uuid: string,
+  user_id: number,
+  week_number: number,
+  score: number,
+  access_token: string | null | undefined
+) {
+  const result: any = await fetch(
+    `${getAPIUrl()}assignments/course/${course_uuid}/discussion-grades/${user_id}/week/${week_number}`,
+    RequestBodyWithAuthHeader('PUT', { score, max_score: 100 }, null, access_token || undefined)
+  )
+  return await errorHandling(result)
+}

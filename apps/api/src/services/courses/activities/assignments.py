@@ -20,6 +20,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from src.db.courses.activities import Activity
+from src.db.courses.chapters import Chapter
+from src.db.courses.course_discussion_grades import CourseDiscussionGrade
 from src.db.courses.assignments import (
     Assignment,
     AssignmentCreate,
@@ -3878,16 +3880,13 @@ async def get_course_grade_leaderboard(
     current_user: PublicUser | AnonymousUser | APITokenUser,
     db_session: AsyncSession,
 ):
-    """Return a normalized, instructor-only grade leaderboard for a course.
+    """Return a week-by-week course gradebook.
 
-    ``AssignmentUserSubmission.grade`` stores raw task points, while each
-    assignment can use a different task scale.  Ranking raw values would make
-    an 8,500/10,000 submission look better than a 95/100 submission, so every
-    graded assignment is normalized to a percentage before learner averages
-    are calculated.
-
-    Only public profile fields are returned.  Email addresses and feedback are
-    deliberately excluded because this endpoint exposes course-wide grade data.
+    Enrolled learners may view the full class gradebook, while only course
+    graders can change discussion scores. Assignment points are normalized per
+    assignment before averaging within a week. Only public profile fields and
+    numeric scores are returned: email addresses and grading feedback never
+    leave this endpoint.
     """
     course = (
         await db_session.execute(
@@ -3898,41 +3897,89 @@ async def get_course_grade_leaderboard(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    # Course-wide grades are instructor data.  READ access is insufficient:
-    # learners who can view the course must never be able to enumerate peers'
-    # scores.  This mirrors the permission used by manual grading.
     await authorize_assignment_access(
         request,
         db_session,
         current_user,
         course.course_uuid,
-        AccessAction.UPDATE,
+        AccessAction.READ,
         token_action="read",
     )
 
-    assignment_ids = [
-        assignment_id
-        for assignment_id in (
+    can_manage = await _is_assignment_instructor(
+        request, current_user, course.course_uuid, db_session
+    )
+
+    assignment_statement = select(Assignment).where(Assignment.course_id == course.id)
+    if not can_manage:
+        # Learners must not learn about draft assignments through the gradebook.
+        assignment_statement = assignment_statement.where(Assignment.published == True)  # noqa: E712
+    assignments = list(
+        (await db_session.execute(assignment_statement)).scalars().all()
+    )
+    assignment_ids = [int(item.id) for item in assignments if item.id is not None]
+
+    # A signed-in visitor to a public course is not automatically entitled to
+    # see class grades. Staff are authorized above; everyone else must have an
+    # actual course run or an assignment row in this course.
+    if not can_manage:
+        has_run = (
             await db_session.execute(
-                select(Assignment.id).where(Assignment.course_id == course.id)
+                select(TrailRun.id).where(
+                    TrailRun.course_id == course.id,
+                    TrailRun.user_id == current_user.id,
+                )
+            )
+        ).scalars().first()
+        has_assignment = None
+        if assignment_ids:
+            has_assignment = (
+                await db_session.execute(
+                    select(AssignmentUserSubmission.id).where(
+                        AssignmentUserSubmission.assignment_id.in_(assignment_ids),  # type: ignore[attr-defined]
+                        AssignmentUserSubmission.user_id == current_user.id,
+                    )
+                )
+            ).scalars().first()
+        if has_run is None and has_assignment is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Enroll in this course to view its gradebook",
+            )
+
+    chapters = list(
+        (
+            await db_session.execute(
+                select(Chapter).where(Chapter.course_id == course.id)
             )
         ).scalars().all()
-        if assignment_id is not None
-    ]
-
-    empty_summary = {
-        "learners": 0,
-        "course_average_percentage": 0.0,
-        "top_score_percentage": 0.0,
-        "graded_submissions": 0,
-        "course_assignments": len(assignment_ids),
+    )
+    chapter_by_id = {int(chapter.id): chapter for chapter in chapters if chapter.id is not None}
+    ordered_chapter_ids = sorted(chapter_by_id)
+    chapter_ordinal = {
+        chapter_id: index + 1 for index, chapter_id in enumerate(ordered_chapter_ids)
     }
-    if not assignment_ids:
-        return {
-            "course_uuid": course.course_uuid,
-            "summary": empty_summary,
-            "rankings": [],
-        }
+    week_pattern = re.compile(r"\bweek\s*[-:#]?\s*(\d+)\b", re.IGNORECASE)
+
+    def week_from_text(*parts: str | None) -> int | None:
+        match = week_pattern.search(" ".join(part or "" for part in parts))
+        return int(match.group(1)) if match else None
+
+    week_by_assignment: dict[int, int] = {}
+    for assignment in assignments:
+        if assignment.id is None:
+            continue
+        chapter = chapter_by_id.get(assignment.chapter_id)
+        week_number = week_from_text(
+            assignment.title,
+            assignment.description,
+            chapter.name if chapter else None,
+        )
+        if week_number is None:
+            # Chapters are the durable course sequence, so an unlabeled
+            # assignment inherits its chapter's 1-based position.
+            week_number = chapter_ordinal.get(assignment.chapter_id, 1)
+        week_by_assignment[int(assignment.id)] = week_number
 
     task_rows = (
         await db_session.execute(
@@ -3947,17 +3994,28 @@ async def get_course_grade_leaderboard(
             + max(int(max_grade_value or 0), 0)
         )
 
-    submission_rows = (
+    submission_rows = []
+    if assignment_ids:
+        submission_rows = (
+            await db_session.execute(
+                select(AssignmentUserSubmission, User)
+                .join(User, User.id == AssignmentUserSubmission.user_id)  # type: ignore[arg-type]
+                .where(AssignmentUserSubmission.assignment_id.in_(assignment_ids))  # type: ignore[attr-defined]
+            )
+        ).all()
+
+    discussion_rows = (
         await db_session.execute(
-            select(AssignmentUserSubmission, User)
-            .join(User, User.id == AssignmentUserSubmission.user_id)  # type: ignore[arg-type]
-            .where(AssignmentUserSubmission.assignment_id.in_(assignment_ids))  # type: ignore[attr-defined]
+            select(CourseDiscussionGrade, User)
+            .join(User, User.id == CourseDiscussionGrade.user_id)  # type: ignore[arg-type]
+            .where(CourseDiscussionGrade.course_id == course.id)
         )
     ).all()
 
     by_user: dict[int, dict] = {}
-    for submission, user in submission_rows:
-        learner = by_user.setdefault(
+
+    def ensure_learner(user: User) -> dict:
+        return by_user.setdefault(
             int(user.id),
             {
                 "user": {
@@ -3968,12 +4026,26 @@ async def get_course_grade_leaderboard(
                     "last_name": user.last_name,
                     "avatar_image": user.avatar_image or "",
                 },
-                "assigned_assignments": 0,
-                "graded_assignments": 0,
-                "percentage_total": 0.0,
+                "weeks": {},
             },
         )
-        learner["assigned_assignments"] += 1
+
+    for submission, user in submission_rows:
+        learner = ensure_learner(user)
+        week_number = week_by_assignment.get(submission.assignment_id, 1)
+        week = learner["weeks"].setdefault(
+            str(week_number),
+            {
+                "assignment": {
+                    "percentage_total": 0.0,
+                    "graded_count": 0,
+                    "assigned_count": 0,
+                },
+                "discussion": None,
+            },
+        )
+        assignment_grade = week["assignment"]
+        assignment_grade["assigned_count"] += 1
 
         if submission.submission_status != AssignmentUserSubmissionStatus.GRADED:
             continue
@@ -3983,28 +4055,50 @@ async def get_course_grade_leaderboard(
             continue
 
         raw_percentage = (float(submission.grade or 0) / max_points) * 100.0
-        learner["percentage_total"] += max(min(raw_percentage, 100.0), 0.0)
-        learner["graded_assignments"] += 1
-
-    rankings = []
-    for learner in by_user.values():
-        if learner["graded_assignments"] == 0:
-            continue
-        graded_count = learner["graded_assignments"]
-        assigned_count = learner["assigned_assignments"]
-        rankings.append(
-            {
-                "user": learner["user"],
-                "average_percentage": round(
-                    learner["percentage_total"] / graded_count, 2
-                ),
-                "graded_assignments": graded_count,
-                "assigned_assignments": assigned_count,
-                "coverage_percentage": round(
-                    (graded_count / assigned_count) * 100.0, 2
-                ),
-            }
+        assignment_grade["percentage_total"] += max(
+            min(raw_percentage, 100.0), 0.0
         )
+        assignment_grade["graded_count"] += 1
+
+    for discussion_grade, user in discussion_rows:
+        learner = ensure_learner(user)
+        week = learner["weeks"].setdefault(
+            str(discussion_grade.week_number),
+            {
+                "assignment": {
+                    "percentage_total": 0.0,
+                    "graded_count": 0,
+                    "assigned_count": 0,
+                },
+                "discussion": None,
+            },
+        )
+        percentage = (discussion_grade.score / discussion_grade.max_score) * 100.0
+        week["discussion"] = {
+            "score": discussion_grade.score,
+            "max_score": discussion_grade.max_score,
+            "percentage": round(max(min(percentage, 100.0), 0.0), 2),
+            "status": "graded",
+        }
+
+    gradebook = []
+    for learner in by_user.values():
+        for week in learner["weeks"].values():
+            assignment_grade = week["assignment"]
+            graded_count = assignment_grade.pop("graded_count")
+            assigned_count = assignment_grade.pop("assigned_count")
+            percentage_total = assignment_grade.pop("percentage_total")
+            week["assignment"] = {
+                "percentage": (
+                    round(percentage_total / graded_count, 2)
+                    if graded_count
+                    else None
+                ),
+                "graded_count": graded_count,
+                "assigned_count": assigned_count,
+                "status": "graded" if graded_count else "not_graded",
+            }
+        gradebook.append(learner)
 
     def learner_name(row: dict) -> str:
         user = row["user"]
@@ -4013,43 +4107,113 @@ async def get_course_grade_leaderboard(
             or user["username"]
         ).casefold()
 
-    rankings.sort(
-        key=lambda row: (
-            -row["average_percentage"],
-            -row["graded_assignments"],
-            learner_name(row),
-            row["user"]["id"],
-        )
+    gradebook.sort(key=lambda row: (learner_name(row), row["user"]["id"]))
+    week_numbers = sorted(
+        set(week_by_assignment.values())
+        | {int(grade.week_number) for grade, _user in discussion_rows}
     )
-
-    previous_score: float | None = None
-    previous_rank = 0
-    for index, row in enumerate(rankings):
-        score = row["average_percentage"]
-        if previous_score is None or score != previous_score:
-            previous_rank = index + 1
-            previous_score = score
-        row["rank"] = previous_rank
-
-    learner_count = len(rankings)
-    course_average = (
-        round(
-            sum(row["average_percentage"] for row in rankings) / learner_count,
-            2,
-        )
-        if learner_count
-        else 0.0
-    )
-    summary = {
-        "learners": learner_count,
-        "course_average_percentage": course_average,
-        "top_score_percentage": rankings[0]["average_percentage"] if rankings else 0.0,
-        "graded_submissions": sum(row["graded_assignments"] for row in rankings),
-        "course_assignments": len(assignment_ids),
-    }
 
     return {
         "course_uuid": course.course_uuid,
-        "summary": summary,
-        "rankings": rankings,
+        "can_manage": can_manage,
+        "weeks": [
+            {"week_number": week_number, "label": f"Week {week_number}"}
+            for week_number in week_numbers
+        ],
+        "summary": {
+            "learners": len(gradebook),
+            "weeks": len(week_numbers),
+        },
+        "gradebook": gradebook,
+    }
+
+
+async def upsert_course_discussion_grade(
+    request: Request,
+    course_uuid: str,
+    user_id: int,
+    week_number: int,
+    score: int,
+    max_score: int,
+    current_user: PublicUser | AnonymousUser | APITokenUser,
+    db_session: AsyncSession,
+):
+    """Create or replace one weekly discussion score (course staff only)."""
+    course = (
+        await db_session.execute(
+            select(Course).where(Course.course_uuid == course_uuid)
+        )
+    ).scalars().first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    await authorize_assignment_access(
+        request,
+        db_session,
+        current_user,
+        course.course_uuid,
+        AccessAction.UPDATE,
+        token_action="update",
+    )
+
+    if week_number < 1 or max_score < 1 or score < 0 or score > max_score:
+        raise HTTPException(status_code=422, detail="Invalid discussion grade")
+
+    assignment_ids = list(
+        (
+            await db_session.execute(
+                select(Assignment.id).where(Assignment.course_id == course.id)
+            )
+        ).scalars().all()
+    )
+    learner_submission = None
+    if assignment_ids:
+        learner_submission = (
+            await db_session.execute(
+                select(AssignmentUserSubmission.id).where(
+                    AssignmentUserSubmission.assignment_id.in_(assignment_ids),  # type: ignore[attr-defined]
+                    AssignmentUserSubmission.user_id == user_id,
+                )
+            )
+        ).scalars().first()
+    if learner_submission is None:
+        raise HTTPException(status_code=404, detail="Course learner not found")
+
+    grade = (
+        await db_session.execute(
+            select(CourseDiscussionGrade).where(
+                CourseDiscussionGrade.course_id == course.id,
+                CourseDiscussionGrade.user_id == user_id,
+                CourseDiscussionGrade.week_number == week_number,
+            )
+        )
+    ).scalars().first()
+    now = str(datetime.now())
+    if grade is None:
+        grade = CourseDiscussionGrade(
+            course_id=int(course.id),
+            user_id=user_id,
+            week_number=week_number,
+            score=score,
+            max_score=max_score,
+            graded_by_id=getattr(current_user, "id", None),
+            creation_date=now,
+            update_date=now,
+        )
+    else:
+        grade.score = score
+        grade.max_score = max_score
+        grade.graded_by_id = getattr(current_user, "id", None)
+        grade.update_date = now
+
+    db_session.add(grade)
+    await db_session.commit()
+    await db_session.refresh(grade)
+    return {
+        "user_id": grade.user_id,
+        "week_number": grade.week_number,
+        "score": grade.score,
+        "max_score": grade.max_score,
+        "percentage": round((grade.score / grade.max_score) * 100.0, 2),
+        "status": "graded",
     }

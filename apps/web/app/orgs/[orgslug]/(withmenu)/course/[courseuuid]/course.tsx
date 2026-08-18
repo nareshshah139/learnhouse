@@ -10,7 +10,7 @@ import GeneralWrapperStyled from '@components/Objects/StyledElements/Wrappers/Ge
 import {
   getCourseThumbnailMediaDirectory,
 } from '@services/media/media'
-import { ArrowRight, Backpack, Check, File, StickyNote, Video, Square, Image as ImageIcon, Layers, BookCopy, Lock, Globe, Package, Puzzle } from 'lucide-react'
+import { ArrowRight, Backpack, Check, File, StickyNote, Video, Square, Image as ImageIcon, Layers, BookCopy, Lock, Globe, GraduationCap, Package, Puzzle } from 'lucide-react'
 import { MarkdownLogo } from '@phosphor-icons/react'
 import { useOrg } from '@components/Contexts/OrgContext'
 import { CourseProvider } from '@components/Contexts/CourseContext'
@@ -503,6 +503,19 @@ const CourseClient = (props: any) => {
               <div className='course_metadata_right w-full md:w-1/4 space-y-4'>
                 {/* Actions Box */}
                 <CoursesActions courseuuid={courseuuid} orgslug={orgslug} course={course} trailData={trailData} />
+
+                {access_token ? (
+                  <Link
+                    href={getUriWithOrg(orgslug, `/course/${courseuuid}/grades`)}
+                    className="group flex min-h-12 items-center justify-between rounded-lg bg-white px-4 py-3 text-sm font-semibold text-gray-900 shadow-md shadow-gray-300/25 outline outline-1 outline-neutral-200/40 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <GraduationCap size={18} className="text-gray-500" aria-hidden="true" />
+                      View course grades
+                    </span>
+                    <ArrowRight size={16} className="text-gray-400 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                  </Link>
+                ) : null}
                 
                 {/* Authors & Updates Box */}
                 <div className="bg-white shadow-md shadow-gray-300/25 outline outline-1 outline-neutral-200/40 rounded-lg overflow-hidden p-4">

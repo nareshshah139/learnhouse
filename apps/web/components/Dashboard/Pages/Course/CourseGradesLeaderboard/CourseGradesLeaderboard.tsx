@@ -1,17 +1,17 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, LockKeyhole, Medal, RefreshCw, Search, Trophy } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AlertCircle, Check, GraduationCap, Pencil, RefreshCw, Search, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { queryKeys } from '@/lib/query/keys'
 import { useLHSession } from '@components/Contexts/LHSessionContext'
 import UserAvatar from '@components/Objects/UserAvatar'
-import { getCourseGradeLeaderboard } from '@services/courses/courses'
+import { getCourseGradeLeaderboard, updateCourseDiscussionGrade } from '@services/courses/courses'
 import { getUserAvatarMediaDirectory } from '@services/media/media'
 
-type LeaderboardUser = {
+type GradebookUser = {
   id: number
   user_uuid: string
   username: string
@@ -20,58 +20,53 @@ type LeaderboardUser = {
   avatar_image: string
 }
 
-type LeaderboardRow = {
-  rank: number
-  user: LeaderboardUser
-  average_percentage: number
-  graded_assignments: number
-  assigned_assignments: number
-  coverage_percentage: number
+type AssignmentGrade = {
+  percentage: number | null
+  graded_count: number
+  assigned_count: number
+  status: 'graded' | 'not_graded'
 }
 
-type LeaderboardResponse = {
+type DiscussionGrade = {
+  percentage: number
+  score: number
+  max_score: number
+  status: 'graded'
+}
+
+type WeekGrade = {
+  assignment: AssignmentGrade
+  discussion: DiscussionGrade | null
+}
+
+type GradebookRow = {
+  user: GradebookUser
+  weeks: Record<string, WeekGrade>
+}
+
+type GradebookResponse = {
   course_uuid: string
-  summary: {
-    learners: number
-    course_average_percentage: number
-    top_score_percentage: number
-    graded_submissions: number
-    course_assignments: number
-  }
-  rankings: LeaderboardRow[]
-}
-
-const medalStyles: Record<number, string> = {
-  1: 'text-amber-500',
-  2: 'text-slate-400',
-  3: 'text-orange-500',
+  can_manage: boolean
+  weeks: Array<{ week_number: number; label: string }>
+  summary: { learners: number; weeks: number }
+  gradebook: GradebookRow[]
 }
 
 const formatPercentage = (value: number) => `${value.toFixed(2).replace(/\.00$/, '')}%`
 
-function learnerName(user: LeaderboardUser) {
+function letterGrade(score: number) {
+  if (score >= 90) return 'A'
+  if (score >= 80) return 'B'
+  if (score >= 70) return 'C'
+  if (score >= 60) return 'D'
+  return 'F'
+}
+
+function learnerName(user: GradebookUser) {
   return `${user.first_name || ''} ${user.last_name || ''}`.trim() || `@${user.username}`
 }
 
-function scoreColor(score: number) {
-  if (score >= 90) return 'bg-emerald-500'
-  if (score >= 75) return 'bg-sky-500'
-  if (score >= 60) return 'bg-amber-500'
-  return 'bg-rose-500'
-}
-
-function Rank({ rank }: { rank: number }) {
-  if (rank <= 3) {
-    return (
-      <div className="flex w-8 items-center justify-center" aria-label={`Rank ${rank}`}>
-        <Medal className={medalStyles[rank]} fill="currentColor" size={22} strokeWidth={1.6} />
-      </div>
-    )
-  }
-  return <span className="block w-8 text-center text-sm font-semibold text-gray-500">{rank}</span>
-}
-
-function LearnerIdentity({ user }: { user: LeaderboardUser }) {
+function LearnerIdentity({ user }: { user: GradebookUser }) {
   const avatarUrl = user.avatar_image
     ? getUserAvatarMediaDirectory(user.user_uuid, user.avatar_image)
     : ''
@@ -92,18 +87,107 @@ function LearnerIdentity({ user }: { user: LeaderboardUser }) {
   )
 }
 
-function LeaderboardSkeleton() {
+function GradeValue({ percentage, detail }: { percentage: number | null | undefined; detail?: string }) {
+  if (percentage === null || percentage === undefined) {
+    return <span className="text-sm font-medium text-gray-400">Not graded</span>
+  }
+
+  return (
+    <div>
+      <p className="text-sm font-semibold tabular-nums text-gray-950">
+        {formatPercentage(percentage)} <span className="text-gray-400">·</span> {letterGrade(percentage)}
+      </p>
+      {detail ? <p className="mt-0.5 text-xs tabular-nums text-gray-500">{detail}</p> : null}
+    </div>
+  )
+}
+
+function DiscussionGradeEditor({
+  grade,
+  isSaving,
+  onSave,
+}: {
+  grade: DiscussionGrade | null
+  isSaving: boolean
+  onSave: (_score: number) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [score, setScore] = useState(String(grade?.score ?? ''))
+
+  if (!editing) {
+    return (
+      <div className="group flex items-center justify-between gap-2">
+        <GradeValue
+          percentage={grade?.percentage}
+          detail={grade ? `${grade.score} / ${grade.max_score} points` : undefined}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            setScore(String(grade?.score ?? ''))
+            setEditing(true)
+          }}
+          className="rounded-lg p-1.5 text-gray-400 opacity-100 transition hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+          aria-label="Edit discussion grade"
+        >
+          <Pencil size={14} />
+        </button>
+      </div>
+    )
+  }
+
+  const numericScore = Number(score)
+  const valid = score.trim() !== '' && Number.isInteger(numericScore) && numericScore >= 0 && numericScore <= 100
+
+  return (
+    <div className="flex items-center gap-2">
+      <label className="sr-only">Discussion score out of 100</label>
+      <input
+        type="number"
+        min={0}
+        max={100}
+        step={1}
+        value={score}
+        onChange={(event) => setScore(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setEditing(false)
+          if (event.key === 'Enter' && valid) {
+            onSave(numericScore)
+            setEditing(false)
+          }
+        }}
+        autoFocus
+        className="h-9 w-20 rounded-lg border border-gray-300 bg-white px-2 text-sm tabular-nums text-gray-950 outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-900/10"
+      />
+      <span className="text-xs text-gray-400">/100</span>
+      <button
+        type="button"
+        disabled={!valid || isSaving}
+        onClick={() => {
+          onSave(numericScore)
+          setEditing(false)
+        }}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gray-950 text-white hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+        aria-label="Save discussion grade"
+      >
+        <Check size={15} />
+      </button>
+    </div>
+  )
+}
+
+function GradebookSkeleton() {
   return (
     <div className="space-y-3 p-5" aria-label="Loading course grades">
       {[0, 1, 2, 3, 4].map((row) => (
         <div key={row} className="flex animate-pulse items-center gap-4 py-2">
-          <div className="h-6 w-8 rounded bg-gray-100" />
           <div className="h-9 w-9 rounded-full bg-gray-100" />
           <div className="flex-1 space-y-2">
             <div className="h-3 w-36 rounded bg-gray-100" />
             <div className="h-2.5 w-24 rounded bg-gray-100" />
           </div>
-          <div className="h-4 w-14 rounded bg-gray-100" />
+          <div className="h-4 w-20 rounded bg-gray-100" />
+          <div className="h-4 w-20 rounded bg-gray-100" />
         </div>
       ))}
     </div>
@@ -115,84 +199,74 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
   const session = useLHSession() as any
   const accessToken = session?.data?.tokens?.access_token
   const [searchQuery, setSearchQuery] = useState('')
+  const [savingCell, setSavingCell] = useState('')
+  const queryClient = useQueryClient()
 
-  const leaderboard = useQuery<LeaderboardResponse>({
+  const gradebook = useQuery<GradebookResponse>({
     queryKey: queryKeys.courses.gradeLeaderboard(courseUUID),
     queryFn: () => getCourseGradeLeaderboard(courseUUID, accessToken),
     enabled: !!courseUUID && !!accessToken,
     staleTime: 30_000,
   })
 
+  const discussionMutation = useMutation({
+    mutationFn: ({ userId, weekNumber, score }: { userId: number; weekNumber: number; score: number }) =>
+      updateCourseDiscussionGrade(courseUUID, userId, weekNumber, score, accessToken),
+    onMutate: ({ userId, weekNumber }) => setSavingCell(`${userId}:${weekNumber}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.courses.gradeLeaderboard(courseUUID) }),
+    onSettled: () => setSavingCell(''),
+  })
+
   const rows = useMemo(() => {
-    const allRows = leaderboard.data?.rankings ?? []
+    const allRows = gradebook.data?.gradebook ?? []
     const query = searchQuery.trim().toLocaleLowerCase()
     if (!query) return allRows
-    return allRows.filter((row) => {
-      const user = row.user
-      return [learnerName(user), user.username]
-        .join(' ')
-        .toLocaleLowerCase()
-        .includes(query)
-    })
-  }, [leaderboard.data?.rankings, searchQuery])
+    return allRows.filter((row) =>
+      [learnerName(row.user), row.user.username].join(' ').toLocaleLowerCase().includes(query)
+    )
+  }, [gradebook.data?.gradebook, searchQuery])
 
-  const summary = leaderboard.data?.summary
+  const weeks = gradebook.data?.weeks ?? []
+  const canManage = gradebook.data?.can_manage ?? false
 
   return (
-    <section className="mx-auto w-full max-w-[1280px] px-4 py-8 sm:px-8 lg:px-10">
+    <section className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-8 lg:px-10">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="max-w-2xl">
           <h1 className="text-2xl font-semibold tracking-[-0.025em] text-gray-950">
-            {t('dashboard.courses.grades.title', { defaultValue: 'Course grades' })}
+            {t('dashboard.courses.grades.title', { defaultValue: 'Course gradebook' })}
           </h1>
           <p className="mt-2 text-sm leading-6 text-gray-600">
             {t('dashboard.courses.grades.description', {
-              defaultValue: 'Rankings use each learner’s average normalized percentage across graded assignments.',
+              defaultValue: 'Assignment and discussion results are shown separately for each course week.',
             })}
           </p>
           <div className="mt-3 flex items-center gap-1.5 text-xs font-medium text-gray-500">
-            <LockKeyhole size={14} aria-hidden="true" />
-            {t('dashboard.courses.grades.private', {
-              defaultValue: 'Private to course graders and organization administrators',
-            })}
+            <ShieldCheck size={14} aria-hidden="true" />
+            {canManage
+              ? t('dashboard.courses.grades.staff_access', { defaultValue: 'You can update discussion grades' })
+              : t('dashboard.courses.grades.learner_access', { defaultValue: 'Read-only class gradebook' })}
           </div>
         </div>
         <button
           type="button"
-          onClick={() => leaderboard.refetch()}
-          disabled={leaderboard.isFetching}
+          onClick={() => gradebook.refetch()}
+          disabled={gradebook.isFetching}
           className="inline-flex min-h-10 items-center justify-center gap-2 self-start rounded-xl border border-gray-200 bg-white px-3.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <RefreshCw className={leaderboard.isFetching ? 'animate-spin' : ''} size={16} />
+          <RefreshCw className={gradebook.isFetching ? 'animate-spin' : ''} size={16} />
           {t('common.refresh', { defaultValue: 'Refresh' })}
         </button>
       </header>
 
-      <div className="mt-7 overflow-hidden rounded-2xl border border-gray-200 bg-white">
-        <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-4 sm:divide-y-0">
-          {[
-            {
-              label: t('dashboard.courses.grades.learners', { defaultValue: 'Ranked learners' }),
-              value: summary?.learners ?? 0,
-            },
-            {
-              label: t('dashboard.courses.grades.average', { defaultValue: 'Course average' }),
-              value: formatPercentage(summary?.course_average_percentage ?? 0),
-            },
-            {
-              label: t('dashboard.courses.grades.top_score', { defaultValue: 'Top score' }),
-              value: formatPercentage(summary?.top_score_percentage ?? 0),
-            },
-            {
-              label: t('dashboard.courses.grades.graded_work', { defaultValue: 'Graded submissions' }),
-              value: summary?.graded_submissions ?? 0,
-            },
-          ].map((stat) => (
-            <div key={stat.label} className="px-4 py-5 sm:px-6">
-              <p className="text-xs font-medium text-gray-500">{stat.label}</p>
-              <p className="mt-1.5 text-xl font-semibold tracking-[-0.02em] text-gray-950">{stat.value}</p>
-            </div>
-          ))}
+      <div className="mt-7 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4">
+          <p className="text-xs font-medium text-gray-500">Learners</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-gray-950">{gradebook.data?.summary.learners ?? 0}</p>
+        </div>
+        <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4">
+          <p className="text-xs font-medium text-gray-500">Course weeks</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-gray-950">{gradebook.data?.summary.weeks ?? 0}</p>
         </div>
       </div>
 
@@ -200,108 +274,109 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
         <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div>
             <h2 className="flex items-center gap-2 text-base font-semibold text-gray-950">
-              <Trophy size={18} className="text-amber-500" aria-hidden="true" />
-              {t('dashboard.courses.grades.leaderboard', { defaultValue: 'Leaderboard' })}
+              <GraduationCap size={18} className="text-gray-600" aria-hidden="true" />
+              Weekly results
             </h2>
-            <p className="mt-1 text-xs text-gray-500">
-              {t('dashboard.courses.grades.coverage_note', {
-                defaultValue: 'Coverage shows graded assignments out of the assignments currently associated with each learner.',
-              })}
-            </p>
+            <p className="mt-1 text-xs text-gray-500">Scores are not combined into a course-wide aggregate.</p>
           </div>
           <label className="relative block w-full sm:w-72">
-            <span className="sr-only">
-              {t('dashboard.courses.grades.search', { defaultValue: 'Search learners' })}
-            </span>
+            <span className="sr-only">Search learners</span>
             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder={t('dashboard.courses.grades.search', { defaultValue: 'Search learners' })}
+              placeholder="Search learners"
               className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:ring-2 focus:ring-gray-900/10"
             />
           </label>
         </div>
 
-        {leaderboard.isLoading ? <LeaderboardSkeleton /> : null}
+        {gradebook.isLoading ? <GradebookSkeleton /> : null}
 
-        {leaderboard.isError ? (
+        {gradebook.isError ? (
           <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
             <AlertCircle className="text-rose-500" size={28} aria-hidden="true" />
-            <h3 className="mt-3 text-sm font-semibold text-gray-950">
-              {t('dashboard.courses.grades.error_title', { defaultValue: 'Course grades could not be loaded' })}
-            </h3>
-            <p className="mt-1 max-w-md text-sm text-gray-500">
-              {t('dashboard.courses.grades.error_description', {
-                defaultValue: 'Check your connection and try refreshing the leaderboard.',
-              })}
-            </p>
+            <h3 className="mt-3 text-sm font-semibold text-gray-950">Course grades could not be loaded</h3>
+            <p className="mt-1 max-w-md text-sm text-gray-500">You must be enrolled in this course to view its gradebook.</p>
             <button
               type="button"
-              onClick={() => leaderboard.refetch()}
+              onClick={() => gradebook.refetch()}
               className="mt-4 rounded-xl bg-gray-950 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2"
             >
-              {t('common.try_again', { defaultValue: 'Try again' })}
+              Try again
             </button>
           </div>
         ) : null}
 
-        {!leaderboard.isLoading && !leaderboard.isError && rows.length === 0 ? (
+        {!gradebook.isLoading && !gradebook.isError && rows.length === 0 ? (
           <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
-            <Trophy className="text-gray-300" size={30} aria-hidden="true" />
+            <GraduationCap className="text-gray-300" size={30} aria-hidden="true" />
             <h3 className="mt-3 text-sm font-semibold text-gray-950">
-              {searchQuery
-                ? t('dashboard.courses.grades.no_search_results', { defaultValue: 'No learners match this search' })
-                : t('dashboard.courses.grades.empty_title', { defaultValue: 'No graded work yet' })}
+              {searchQuery ? 'No learners match this search' : 'No gradebook entries yet'}
             </h3>
             <p className="mt-1 max-w-md text-sm text-gray-500">
-              {searchQuery
-                ? t('dashboard.courses.grades.no_search_description', { defaultValue: 'Try another name or username.' })
-                : t('dashboard.courses.grades.empty_description', {
-                    defaultValue: 'Learners appear here after at least one assignment has been graded.',
-                  })}
+              {searchQuery ? 'Try another name or username.' : 'Learners appear here when assignments are associated with them.'}
             </p>
           </div>
         ) : null}
 
-        {!leaderboard.isLoading && !leaderboard.isError && rows.length > 0 ? (
+        {!gradebook.isLoading && !gradebook.isError && rows.length > 0 ? (
           <>
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[720px] border-collapse">
+              <table className="w-full border-separate border-spacing-0" style={{ minWidth: `${280 + weeks.length * 280}px` }}>
                 <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50/80 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-500">
-                    <th className="w-20 px-5 py-3">{t('dashboard.courses.grades.rank', { defaultValue: 'Rank' })}</th>
-                    <th className="px-3 py-3">{t('dashboard.courses.grades.learner', { defaultValue: 'Learner' })}</th>
-                    <th className="w-64 px-3 py-3">{t('dashboard.courses.grades.score', { defaultValue: 'Average score' })}</th>
-                    <th className="w-44 px-5 py-3 text-right">{t('dashboard.courses.grades.coverage', { defaultValue: 'Grading coverage' })}</th>
+                  <tr className="bg-gray-50/90 text-left text-xs font-semibold text-gray-700">
+                    <th rowSpan={2} className="sticky left-0 z-20 w-[280px] border-b border-r border-gray-200 bg-gray-50 px-5 py-3">Learner</th>
+                    {weeks.map((week) => (
+                      <th key={week.week_number} colSpan={2} className="border-b border-r border-gray-200 px-4 py-3 text-center last:border-r-0">
+                        {week.label}
+                      </th>
+                    ))}
+                  </tr>
+                  <tr className="bg-gray-50/70 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-500">
+                    {weeks.map((week) => (
+                      <React.Fragment key={week.week_number}>
+                        <th className="w-[140px] border-b border-r border-gray-200 px-4 py-2.5">Assignment</th>
+                        <th className="w-[140px] border-b border-r border-gray-200 px-4 py-2.5 last:border-r-0">Discussion</th>
+                      </React.Fragment>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody>
                   {rows.map((row) => (
-                    <tr key={row.user.id} className="transition-colors hover:bg-gray-50/70">
-                      <td className="px-5 py-4"><Rank rank={row.rank} /></td>
-                      <td className="px-3 py-4"><LearnerIdentity user={row.user} /></td>
-                      <td className="px-3 py-4">
-                        <div className="flex items-center gap-3">
-                          <span className="w-14 text-right text-sm font-semibold tabular-nums text-gray-950">
-                            {formatPercentage(row.average_percentage)}
-                          </span>
-                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
-                            <div
-                              className={`h-full rounded-full ${scoreColor(row.average_percentage)}`}
-                              style={{ width: `${row.average_percentage}%` }}
-                            />
-                          </div>
-                        </div>
+                    <tr key={row.user.id} className="group hover:bg-gray-50/60">
+                      <td className="sticky left-0 z-10 border-b border-r border-gray-100 bg-white px-5 py-4 group-hover:bg-gray-50">
+                        <LearnerIdentity user={row.user} />
                       </td>
-                      <td className="px-5 py-4 text-right">
-                        <span className="text-sm font-semibold tabular-nums text-gray-800">
-                          {row.graded_assignments}/{row.assigned_assignments}
-                        </span>
-                        <span className="ml-2 text-xs text-gray-400">
-                          {formatPercentage(row.coverage_percentage)}
-                        </span>
-                      </td>
+                      {weeks.map((week) => {
+                        const weekGrade = row.weeks[String(week.week_number)]
+                        const assignment = weekGrade?.assignment
+                        const discussion = weekGrade?.discussion ?? null
+                        return (
+                          <React.Fragment key={week.week_number}>
+                            <td className="border-b border-r border-gray-100 px-4 py-4">
+                              <GradeValue
+                                percentage={assignment?.percentage}
+                                detail={assignment?.assigned_count ? `${assignment.graded_count}/${assignment.assigned_count} graded` : undefined}
+                              />
+                            </td>
+                            <td className="border-b border-r border-gray-100 px-4 py-4 last:border-r-0">
+                              {canManage ? (
+                                <DiscussionGradeEditor
+                                  grade={discussion}
+                                  isSaving={savingCell === `${row.user.id}:${week.week_number}`}
+                                  onSave={(score) => discussionMutation.mutate({ userId: row.user.id, weekNumber: week.week_number, score })}
+                                />
+                              ) : (
+                                <GradeValue
+                                  percentage={discussion?.percentage}
+                                  detail={discussion ? `${discussion.score} / ${discussion.max_score} points` : undefined}
+                                />
+                              )}
+                            </td>
+                          </React.Fragment>
+                        )
+                      })}
                     </tr>
                   ))}
                 </tbody>
@@ -310,24 +385,36 @@ export default function CourseGradesLeaderboard({ courseUUID }: { courseUUID: st
 
             <div className="divide-y divide-gray-100 md:hidden">
               {rows.map((row) => (
-                <article key={row.user.id} className="px-4 py-4">
-                  <div className="flex items-center gap-3">
-                    <Rank rank={row.rank} />
-                    <div className="min-w-0 flex-1"><LearnerIdentity user={row.user} /></div>
-                    <span className="text-sm font-semibold tabular-nums text-gray-950">
-                      {formatPercentage(row.average_percentage)}
-                    </span>
-                  </div>
-                  <div className="ml-11 mt-3 flex items-center gap-3">
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
-                      <div
-                        className={`h-full rounded-full ${scoreColor(row.average_percentage)}`}
-                        style={{ width: `${row.average_percentage}%` }}
-                      />
-                    </div>
-                    <span className="text-xs tabular-nums text-gray-500">
-                      {row.graded_assignments}/{row.assigned_assignments} graded
-                    </span>
+                <article key={row.user.id} className="px-4 py-5">
+                  <LearnerIdentity user={row.user} />
+                  <div className="mt-4 space-y-3">
+                    {weeks.map((week) => {
+                      const weekGrade = row.weeks[String(week.week_number)]
+                      const discussion = weekGrade?.discussion ?? null
+                      return (
+                        <div key={week.week_number} className="rounded-xl border border-gray-200">
+                          <h3 className="border-b border-gray-100 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-700">{week.label}</h3>
+                          <div className="grid grid-cols-2 divide-x divide-gray-100">
+                            <div className="min-w-0 p-3">
+                              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Assignment</p>
+                              <GradeValue percentage={weekGrade?.assignment?.percentage} />
+                            </div>
+                            <div className="min-w-0 p-3">
+                              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Discussion</p>
+                              {canManage ? (
+                                <DiscussionGradeEditor
+                                  grade={discussion}
+                                  isSaving={savingCell === `${row.user.id}:${week.week_number}`}
+                                  onSave={(score) => discussionMutation.mutate({ userId: row.user.id, weekNumber: week.week_number, score })}
+                                />
+                              ) : (
+                                <GradeValue percentage={discussion?.percentage} />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </article>
               ))}

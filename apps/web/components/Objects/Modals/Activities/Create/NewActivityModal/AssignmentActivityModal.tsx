@@ -7,7 +7,17 @@ import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
 import { createAssignment } from '@services/courses/assignments'
 import { useLHSession } from '@components/Contexts/LHSessionContext'
-import { createActivity, deleteActivity } from '@services/courses/activities'
+import {
+  addUserGroupToActivity,
+  createActivity,
+  deleteActivity,
+} from '@services/courses/activities'
+import {
+  assignmentAudienceLockType,
+  isAssignmentAudienceValid,
+  type AssignmentAudienceMode,
+} from '@services/courses/assignmentAudience'
+import AssignmentAudienceSelector from '@components/Objects/Modals/Activities/Assignments/AssignmentAudienceSelector'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import { useLHAnalytics, AnalyticsEvent } from '@services/analytics'
@@ -48,9 +58,15 @@ function NewAssignment({ submitActivity: _submitActivity, chapterId, course, clo
   const [showCorrectAnswers, setShowCorrectAnswers] = React.useState(false)
   const [allowRetries, setAllowRetries] = React.useState(false)
   const [maxRetries, setMaxRetries] = React.useState(0)
+  const [audienceMode, setAudienceMode] = React.useState<AssignmentAudienceMode>('all')
+  const [selectedGroupUuids, setSelectedGroupUuids] = React.useState<string[]>([])
 
   const handleSubmit = async (e: any) => {
     e.preventDefault()
+    if (!isAssignmentAudienceValid(audienceMode, selectedGroupUuids)) {
+      toast.error(t('dashboard.assignments.audience.select_required', { defaultValue: 'Select at least one group.' }))
+      return
+    }
     setIsSubmitting(true)
     const activity = {
       name: activityName,
@@ -59,6 +75,7 @@ function NewAssignment({ submitActivity: _submitActivity, chapterId, course, clo
       activity_sub_type: 'SUBTYPE_ASSIGNMENT_ANY',
       published: false,
       course_id: course?.courseStructure.id,
+      lock_type: assignmentAudienceLockType(audienceMode, selectedGroupUuids),
     }
 
     const activity_res = await createActivity(
@@ -91,12 +108,31 @@ function NewAssignment({ submitActivity: _submitActivity, chapterId, course, clo
 
     if (res.success) {
       toast.dismiss(toast_loading)
-      toast.success(t('dashboard.assignments.modals.create.toasts.success'))
+      try {
+        if (audienceMode === 'groups') {
+          await Promise.all(
+            selectedGroupUuids.map((groupUuid) =>
+              addUserGroupToActivity(
+                activity_res.activity_uuid,
+                groupUuid,
+                session.data?.tokens?.access_token
+              )
+            )
+          )
+        }
+        toast.success(t('dashboard.assignments.modals.create.toasts.success'))
+      } catch {
+        toast.error(t('dashboard.assignments.audience.link_error', {
+          defaultValue: 'Assignment created, but group access could not be saved. It remains restricted and unpublished.',
+        }))
+      }
       track(AnalyticsEvent.AssignmentCreated, {
         grading_type: gradingType,
         auto_grading: autoGrading,
         allow_retries: allowRetries,
         has_due_date: !!dueDate,
+        audience: audienceMode,
+        group_count: audienceMode === 'groups' ? selectedGroupUuids.length : 0,
       })
     } else {
       toast.dismiss(toast_loading)
@@ -195,6 +231,15 @@ function NewAssignment({ submitActivity: _submitActivity, chapterId, course, clo
           </Form.Control>
         </Form.Field>
       </div>
+
+      <AssignmentAudienceSelector
+        mode={audienceMode}
+        selectedGroupUuids={selectedGroupUuids}
+        onModeChange={setAudienceMode}
+        onSelectedGroupUuidsChange={setSelectedGroupUuids}
+        accessToken={session.data?.tokens?.access_token}
+        disabled={isSubmitting}
+      />
 
       {/* Grading type */}
       <div className="rounded-xl nice-shadow p-4 space-y-3">
@@ -331,7 +376,7 @@ function NewAssignment({ submitActivity: _submitActivity, chapterId, course, clo
         <Form.Submit asChild>
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !isAssignmentAudienceValid(audienceMode, selectedGroupUuids)}
             className="inline-flex items-center justify-center h-9 px-5 text-sm font-medium text-white bg-black rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
           >
             {isSubmitting ? (

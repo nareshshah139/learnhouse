@@ -239,6 +239,9 @@ export async function getActivityUserGroups(
     `${getAPIUrl()}activities/${activity_uuid}/usergroups`,
     RequestBodyWithAuthHeader('GET', null, null, access_token)
   )
+  if (!result.ok) {
+    throw new Error(`Could not load assignment user groups (HTTP ${result.status})`)
+  }
   return result.json()
 }
 
@@ -251,6 +254,9 @@ export async function addUserGroupToActivity(
     `${getAPIUrl()}activities/${activity_uuid}/usergroups/${usergroup_uuid}`,
     RequestBodyWithAuthHeader('POST', null, null, access_token)
   )
+  if (!result.ok) {
+    throw new Error(`Could not add assignment user group (HTTP ${result.status})`)
+  }
   return result.json()
 }
 
@@ -263,6 +269,9 @@ export async function removeUserGroupFromActivity(
     `${getAPIUrl()}activities/${activity_uuid}/usergroups/${usergroup_uuid}`,
     RequestBodyWithAuthHeader('DELETE', null, null, access_token)
   )
+  if (!result.ok) {
+    throw new Error(`Could not remove assignment user group (HTTP ${result.status})`)
+  }
   return result.json()
 }
 

@@ -15,6 +15,7 @@ import {
     Shield,
     ThumbsUp,
     UserRoundPen,
+    Users,
     Backpack,
     Zap,
     BarChart3,
@@ -265,6 +266,8 @@ function PublishingState() {
                     assignment={{
                         ...assignment?.assignment_object,
                         assignment_tasks: assignment?.assignment_tasks,
+                        activity_uuid: assignment?.activity_object?.activity_uuid,
+                        lock_type: assignment?.activity_object?.lock_type,
                     }}
                     accessToken={access_token}
                 />
@@ -341,6 +344,16 @@ function AssignmentInfoBadges() {
                 <div className={`${BADGE_BASE} ${BADGE_CYAN}`}>
                     <Shield size={13} />
                     <span>{t('dashboard.assignments.detail.header_badges.anti_copy_paste')}</span>
+                </div>
+            )}
+            {assignment?.activity_object?.lock_type === 'restricted' && (
+                <div className={`${BADGE_BASE} ${BADGE_ROSE}`}>
+                    <Users size={13} />
+                    <span>
+                        {t('dashboard.assignments.detail.header_badges.group_individual', {
+                            defaultValue: 'Group brief · individual grades',
+                        })}
+                    </span>
                 </div>
             )}
         </div>

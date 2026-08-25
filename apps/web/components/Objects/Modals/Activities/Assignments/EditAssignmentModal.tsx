@@ -1,7 +1,21 @@
 import React from 'react';
 import { updateAssignment } from '@services/courses/assignments';
-import { useQueryClient } from '@tanstack/react-query';
+import {
+    addUserGroupToActivity,
+    getActivityUserGroups,
+    removeUserGroupFromActivity,
+    updateActivity,
+} from '@services/courses/activities';
+import {
+    assignmentAudienceLockType,
+    assignmentAudienceSyncPlan,
+    isAssignmentAudienceValid,
+    type AssignmentAudienceMode,
+} from '@services/courses/assignmentAudience';
+import AssignmentAudienceSelector from './AssignmentAudienceSelector';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
+import { asArray } from '@services/utils/ts/requests';
 import toast from 'react-hot-toast';
 import * as Form from '@radix-ui/react-form';
 import { useFormik } from 'formik';
@@ -47,6 +61,8 @@ interface Assignment {
     max_retries?: number;
     pass_threshold_percentage?: number | null;
     assignment_tasks?: any[];
+    activity_uuid?: string;
+    lock_type?: 'public' | 'authenticated' | 'restricted';
 }
 
 interface EditAssignmentFormProps {
@@ -131,6 +147,30 @@ const EditAssignmentForm: React.FC<EditAssignmentFormProps> = ({
 }) => {
     const { t } = useTranslation()
     const queryClient = useQueryClient()
+    const [audienceMode, setAudienceMode] = React.useState<AssignmentAudienceMode>(
+        assignment.lock_type === 'restricted' ? 'groups' : 'all'
+    );
+    const [selectedGroupUuids, setSelectedGroupUuids] = React.useState<string[]>([]);
+    const audienceHydrated = React.useRef(false);
+
+    const { data: linkedGroups = [], isSuccess: linkedGroupsLoaded } = useQuery({
+        queryKey: ['assignment-audience', assignment.activity_uuid],
+        queryFn: () => getActivityUserGroups(assignment.activity_uuid as string, accessToken),
+        select: (response: any) => asArray<{ usergroup_uuid: string }>(response),
+        enabled: !!assignment.activity_uuid && !!accessToken,
+        staleTime: 30_000,
+    });
+
+    React.useEffect(() => {
+        if (audienceHydrated.current || !assignment.activity_uuid || !linkedGroupsLoaded) return;
+        setSelectedGroupUuids(linkedGroups.map((group) => group.usergroup_uuid));
+        setAudienceMode(
+            assignment.lock_type === 'restricted' || linkedGroups.length > 0
+                ? 'groups'
+                : 'all'
+        );
+        audienceHydrated.current = true;
+    }, [assignment.activity_uuid, assignment.lock_type, linkedGroups, linkedGroupsLoaded]);
 
     // Auto-grading is incompatible with file-submission tasks — those need
     // human review. If any such task exists, we force the toggle off and
@@ -162,6 +202,11 @@ const EditAssignmentForm: React.FC<EditAssignmentFormProps> = ({
         },
         enableReinitialize: true,
         onSubmit: async (values, { setSubmitting }) => {
+            if (!isAssignmentAudienceValid(audienceMode, selectedGroupUuids)) {
+                toast.error(t('dashboard.assignments.audience.select_required', { defaultValue: 'Select at least one group.' }));
+                setSubmitting(false);
+                return;
+            }
             // Never send auto_grading=true when the assignment has a file task.
             // Also drop max_retries back to 0 when retries are turned off so a
             // stale number doesn't sit in the DB and reappear if the teacher
@@ -182,7 +227,51 @@ const EditAssignmentForm: React.FC<EditAssignmentFormProps> = ({
             try {
                 const res = await updateAssignment(payload, assignment.assignment_uuid, accessToken);
                 if (res.success) {
+                    if (assignment.activity_uuid) {
+                        const desiredGroupUuids = audienceMode === 'groups' ? selectedGroupUuids : [];
+                        const currentGroupUuids = linkedGroups.map((group) => group.usergroup_uuid);
+                        const syncPlan = assignmentAudienceSyncPlan(currentGroupUuids, desiredGroupUuids);
+
+                        // Open access before unlinking the old groups, and attach
+                        // new groups before restricting access. This avoids a
+                        // transient state where a published assignment is locked
+                        // but has no valid audience.
+                        if (audienceMode === 'all') {
+                            const activityResult = await updateActivity(
+                                { lock_type: 'public' },
+                                assignment.activity_uuid,
+                                accessToken
+                            );
+                            if (!activityResult.success) throw new Error('Could not open assignment access');
+                        }
+
+                        await Promise.all(
+                            syncPlan.add.map((groupUuid) =>
+                                addUserGroupToActivity(assignment.activity_uuid as string, groupUuid, accessToken)
+                            )
+                        );
+                        await Promise.all(
+                            syncPlan.remove.map((groupUuid) =>
+                                removeUserGroupFromActivity(assignment.activity_uuid as string, groupUuid, accessToken)
+                            )
+                        );
+
+                        if (audienceMode === 'groups') {
+                            const activityResult = await updateActivity(
+                                {
+                                    lock_type: assignmentAudienceLockType(
+                                        audienceMode,
+                                        selectedGroupUuids
+                                    ),
+                                },
+                                assignment.activity_uuid,
+                                accessToken
+                            );
+                            if (!activityResult.success) throw new Error('Could not restrict assignment access');
+                        }
+                    }
                     queryClient.invalidateQueries({ queryKey: queryKeys.assignments.detail(assignment.assignment_uuid) });
+                    queryClient.invalidateQueries({ queryKey: ['assignment-audience', assignment.activity_uuid] });
                     toast.success(t('dashboard.assignments.modals.edit.toasts.success'));
                     onClose();
                 } else {
@@ -253,6 +342,15 @@ const EditAssignmentForm: React.FC<EditAssignmentFormProps> = ({
                     />
                 </Form.Control>
             </Form.Field>
+
+            <AssignmentAudienceSelector
+                mode={audienceMode}
+                selectedGroupUuids={selectedGroupUuids}
+                onModeChange={setAudienceMode}
+                onSelectedGroupUuidsChange={setSelectedGroupUuids}
+                accessToken={accessToken}
+                disabled={formik.isSubmitting}
+            />
 
             {/* Grading type */}
             <div className="space-y-2">
@@ -371,7 +469,7 @@ const EditAssignmentForm: React.FC<EditAssignmentFormProps> = ({
                 <Form.Submit asChild>
                     <button
                         type="submit"
-                        disabled={formik.isSubmitting}
+                        disabled={formik.isSubmitting || !isAssignmentAudienceValid(audienceMode, selectedGroupUuids)}
                         className="inline-flex items-center justify-center h-9 px-5 text-sm font-medium text-white bg-black rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
                     >
                         {formik.isSubmitting ? t('dashboard.assignments.modals.edit.form.saving') : t('dashboard.assignments.modals.edit.form.save')}

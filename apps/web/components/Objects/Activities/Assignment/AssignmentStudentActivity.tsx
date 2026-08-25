@@ -10,7 +10,7 @@ import TaskCodeObject from 'app/orgs/[orgslug]/dash/assignments/[assignmentuuid]
 import TaskShortAnswerObject from 'app/orgs/[orgslug]/dash/assignments/[assignmentuuid]/_components/TaskEditor/Subs/TaskTypes/TaskShortAnswerObject'
 import TaskNumberAnswerObject from 'app/orgs/[orgslug]/dash/assignments/[assignmentuuid]/_components/TaskEditor/Subs/TaskTypes/TaskNumberAnswerObject'
 import toast from 'react-hot-toast';
-import { AlarmClockOff, Backpack, Calendar, CheckCircle2, Download, EllipsisVertical, Info, MessageSquare, RotateCcw, XCircle } from 'lucide-react';
+import { AlarmClockOff, Backpack, Calendar, CheckCircle2, Download, EllipsisVertical, Info, MessageSquare, RotateCcw, Users, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next';
@@ -116,6 +116,7 @@ function AssignmentStudentActivity() {
     return () => clearInterval(interval);
   }, [dueDateRaw]);
   const isPastDue = useMemo(() => isAssignmentPastDue(dueDateRaw, now), [dueDateRaw, now]);
+  const isGroupAssignment = assignments?.activity_object?.lock_type === 'restricted';
 
   // Render the raw ISO-ish string as a readable, localized date. Falls back to
   // the raw value when it can't be parsed (same tolerance as the server).
@@ -176,6 +177,22 @@ function AssignmentStudentActivity() {
       
       {/* Overdue notice. The server 403s every save/submit once the deadline has
           passed, so say it plainly instead of letting auto-save fail silently. */}
+      {isGroupAssignment && (
+        <div className='flex items-start gap-3 p-4 rounded-md bg-violet-50/70 border border-violet-200/70 nice-shadow'>
+          <Users size={16} className='shrink-0 mt-0.5 text-violet-600' />
+          <div className='flex flex-col space-y-1'>
+            <p className='text-sm font-semibold text-violet-800'>
+              {t('assignments.group_assignment_title', { defaultValue: 'Group assignment, individual grading' })}
+            </p>
+            <p className='text-xs leading-relaxed text-violet-700/90'>
+              {t('assignments.group_assignment_description', {
+                defaultValue: 'Work with your assigned team, then submit your own response. Your submission, feedback, and grade are tracked independently.',
+              })}
+            </p>
+          </div>
+        </div>
+      )}
+
       {isPastDue && !isGraded && (
         <div className='flex items-start gap-3 p-4 rounded-md bg-rose-50/70 border border-rose-200/70 nice-shadow'>
           <AlarmClockOff size={16} className='shrink-0 mt-0.5 text-rose-500' />

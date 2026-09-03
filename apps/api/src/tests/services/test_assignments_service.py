@@ -677,6 +677,125 @@ class TestHandleAssignmentTaskSubmission:
         assert exc.value.status_code == 400
         assert "no submission" in exc.value.detail.lower()
 
+    async def test_instructor_can_grade_external_file_for_target_learner(
+        self,
+        mock_request,
+        db,
+        assignment,
+        assignment_task,
+        user_submission,
+        admin_user,
+        regular_user,
+    ):
+        """An instructor can record a reviewed file supplied outside LearnHouse.
+
+        The learner has an assignment-level row but no task-submission row,
+        matching imports where the attachment was delivered out of band.
+        Passing an explicit learner id must create a manual task grade for that
+        learner rather than a phantom instructor-owned submission.
+        """
+        assignment_task.assignment_type = AssignmentTaskTypeEnum.FILE_SUBMISSION
+        assignment_task.contents = {}
+        db.add(assignment_task)
+        await db.commit()
+
+        obj = AssignmentTaskSubmissionUpdate(
+            task_submission={},
+            grade=70,
+            task_submission_grade_feedback="Graded from externally supplied archive",
+            manually_graded=True,
+        )
+        with patch(_PATCH_RBAC, new_callable=AsyncMock), \
+             patch(_PATCH_AUTH_ROLES, new_callable=AsyncMock, return_value=True), \
+             patch(_PATCH_DISPATCH, new_callable=AsyncMock), \
+             patch(_PATCH_TRACK, new_callable=AsyncMock), \
+             patch(_PATCH_CERT, new_callable=AsyncMock):
+            result = await handle_assignment_task_submission(
+                mock_request,
+                assignment_task.assignment_task_uuid,
+                obj,
+                admin_user,
+                db,
+                on_behalf_of_user_id=regular_user.id,
+            )
+
+            final_grade = await grade_assignment_submission(
+                mock_request,
+                regular_user.id,
+                assignment.assignment_uuid,
+                admin_user,
+                db,
+            )
+
+        assert result.user_id == regular_user.id
+        assert result.grade == 70
+        assert result.manually_graded is True
+        assert result.assignment_task_id == assignment_task.id
+        assert final_grade["percentage"] == 70
+        assert final_grade["grade"] == 70
+
+    async def test_external_grade_without_task_row_is_file_only(
+        self,
+        mock_request,
+        db,
+        assignment_task,
+        user_submission,
+        admin_user,
+        regular_user,
+    ):
+        obj = AssignmentTaskSubmissionUpdate(
+            task_submission={},
+            grade=70,
+            manually_graded=True,
+        )
+        with patch(_PATCH_RBAC, new_callable=AsyncMock), \
+             patch(_PATCH_AUTH_ROLES, new_callable=AsyncMock, return_value=True):
+            with pytest.raises(HTTPException) as exc:
+                await handle_assignment_task_submission(
+                    mock_request,
+                    assignment_task.assignment_task_uuid,
+                    obj,
+                    admin_user,
+                    db,
+                    on_behalf_of_user_id=regular_user.id,
+                )
+
+        assert exc.value.status_code == 400
+        assert "only supported for file tasks" in exc.value.detail
+
+    async def test_external_file_grade_requires_assignment_submission(
+        self,
+        mock_request,
+        db,
+        assignment_task,
+        admin_user,
+        regular_user,
+    ):
+        assignment_task.assignment_type = AssignmentTaskTypeEnum.FILE_SUBMISSION
+        assignment_task.contents = {}
+        db.add(assignment_task)
+        await db.commit()
+
+        obj = AssignmentTaskSubmissionUpdate(
+            task_submission={},
+            grade=70,
+            manually_graded=True,
+        )
+        with patch(_PATCH_RBAC, new_callable=AsyncMock), \
+             patch(_PATCH_AUTH_ROLES, new_callable=AsyncMock, return_value=True):
+            with pytest.raises(HTTPException) as exc:
+                await handle_assignment_task_submission(
+                    mock_request,
+                    assignment_task.assignment_task_uuid,
+                    obj,
+                    admin_user,
+                    db,
+                    on_behalf_of_user_id=regular_user.id,
+                )
+
+        assert exc.value.status_code == 400
+        assert "no assignment submission" in exc.value.detail.lower()
+
 
 # ---------------------------------------------------------------------------
 # read_assignment_submissions

@@ -46,7 +46,7 @@ async function createCourse(token: string, orgId: number, name: string): Promise
 
 export interface TaskSpec {
   title: string
-  assignment_type: 'QUIZ' | 'SHORT_ANSWER' | 'NUMBER_ANSWER' | 'FORM'
+  assignment_type: 'QUIZ' | 'SHORT_ANSWER' | 'NUMBER_ANSWER' | 'FORM' | 'FILE_SUBMISSION'
   contents: Record<string, unknown>
   description?: string
   hint?: string

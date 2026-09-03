@@ -410,7 +410,12 @@ async def api_delete_assignment_tasks(
 @router.put(
     "/{assignment_uuid}/tasks/{assignment_task_uuid}/submissions",
     summary="Upsert assignment task submission",
-    description="Create or update the current user's submission for an assignment task.",
+    description=(
+        "Create or update the current user's submission for an assignment task. "
+        "API tokens may submit on behalf of a learner. Instructors may also "
+        "record a manual grade for an externally supplied file by passing an "
+        "explicit on_behalf_of_user_id."
+    ),
     responses={
         200: {"description": "Task submission stored."},
         401: {"description": "Authentication required"},
@@ -432,6 +437,8 @@ async def api_handle_assignment_task_submissions(
     Sessions write their own submission. An API token with ``assignments.create``
     may submit on behalf of a learner by passing ``on_behalf_of_user_id`` (the
     learner's LearnHouse user id; the learner must belong to the token's org).
+    An instructor session may use the same explicit target only to record a
+    manual grade for a file task when the attachment arrived outside LearnHouse.
     """
     return await handle_assignment_task_submission(
         request,

@@ -1854,6 +1854,57 @@ async def _resolve_token_submission_user(
     return PublicUser(**learner.model_dump())
 
 
+async def _resolve_external_file_grade_user(
+    db_session: AsyncSession,
+    course: Course,
+    assignment: Assignment,
+    assignment_task: AssignmentTask,
+    on_behalf_of_user_id: int,
+) -> PublicUser:
+    """Resolve the learner for an instructor-recorded external file grade.
+
+    This path is intentionally narrow: it only supports file tasks, requires an
+    explicit learner id, and requires that learner to already have an
+    assignment-level submission row. That lets an instructor record a grade for
+    an attachment delivered outside LearnHouse without guessing the target or
+    fabricating a general-purpose answer for quiz/code/form tasks.
+    """
+    if assignment_task.assignment_type != AssignmentTaskTypeEnum.FILE_SUBMISSION:
+        raise HTTPException(
+            status_code=400,
+            detail="External grading without a task submission is only supported for file tasks",
+        )
+
+    from src.security.org_auth import is_org_member
+
+    learner = (
+        await db_session.execute(select(User).where(User.id == on_behalf_of_user_id))
+    ).scalars().first()
+    if not learner:
+        raise HTTPException(status_code=404, detail="Learner not found")
+    if not await is_org_member(learner.id, course.org_id, db_session):
+        raise HTTPException(
+            status_code=403,
+            detail="Learner is not a member of this organization",
+        )
+
+    assignment_submission = (
+        await db_session.execute(
+            select(AssignmentUserSubmission).where(
+                AssignmentUserSubmission.user_id == learner.id,
+                AssignmentUserSubmission.assignment_id == assignment.id,
+            )
+        )
+    ).scalars().first()
+    if not assignment_submission:
+        raise HTTPException(
+            status_code=400,
+            detail="Learner has no assignment submission to attach an external file grade to",
+        )
+
+    return PublicUser(**learner.model_dump())
+
+
 _ASSIGNMENT_TASK_SUBMISSION_MUTABLE_FIELDS = {
     "task_submission",
     "grade",
@@ -1914,10 +1965,19 @@ async def handle_assignment_task_submission(
         is_token_submit = True
     else:
         _block_api_tokens(current_user)
-        submitter = current_user
         # SECURITY: Check if user has instructor/admin permissions for grading
         is_instructor = await authorization_verify_based_on_roles(request, current_user.id, "update", course.course_uuid, db_session)
         is_token_submit = False
+        if is_instructor and on_behalf_of_user_id is not None:
+            submitter = await _resolve_external_file_grade_user(
+                db_session,
+                course,
+                assignment,
+                assignment_task,
+                on_behalf_of_user_id,
+            )
+        else:
+            submitter = current_user
 
     # For non-instructors (session students AND token submit-on-behalf), the call
     # writes a learner ANSWER, never a grade.
@@ -2006,7 +2066,16 @@ async def handle_assignment_task_submission(
                 status_code=404,
                 detail="Assignment Task Submission not found",
             )
-    elif is_instructor and (
+        if (
+            is_instructor
+            and on_behalf_of_user_id is not None
+            and assignment_task_submission.user_id != submitter.id
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Target learner does not own the specified task submission",
+            )
+    elif is_instructor and on_behalf_of_user_id is None and (
         (assignment_task_submission_object.grade is not None
          and assignment_task_submission_object.grade != 0)
         or (assignment_task_submission_object.task_submission_grade_feedback is not None
@@ -2070,15 +2139,35 @@ async def handle_assignment_task_submission(
 
         # Assuming model_dump() returns a dictionary
         model_data = assignment_task_submission_object.model_dump()
+        is_external_file_grade = is_instructor and on_behalf_of_user_id is not None
+        if is_external_file_grade:
+            external_grade = model_data.get("grade")
+            if external_grade is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="An external file grade must include a numeric grade",
+                )
+            if external_grade < 0 or external_grade > int(assignment_task.max_grade_value or 0):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Grade must be between 0 and {assignment_task.max_grade_value}",
+                )
+            external_feedback = (
+                model_data.get("task_submission_grade_feedback")
+                or f"Graded from external evidence by teacher : @{current_user.username}"
+            )
+        else:
+            external_grade = 0
+            external_feedback = ""
 
         assignment_task_submission = AssignmentTaskSubmission(
             assignment_task_submission_uuid=assignment_task_submission_uuid or f"assignmenttasksubmission_{uuid4()}",
-            task_submission=model_data["task_submission"],
-            # Safe to hardcode: this branch is now reachable only on the learner
-            # save-progress path (instructors without a target uuid are rejected
-            # above), and learner writes never carry a grade.
-            grade=0,  # Always start with 0 for new submissions
-            task_submission_grade_feedback="",  # Start with empty feedback
+            task_submission=model_data.get("task_submission") or {},
+            # Learner save-progress starts at zero. The only instructor create
+            # path is the explicit, file-only external-grade flow above.
+            grade=external_grade,
+            task_submission_grade_feedback=external_feedback,
+            manually_graded=is_external_file_grade,
             assignment_task_id=int(assignment_task.id),  # type: ignore
             assignment_type=assignment_task.assignment_type,
             activity_id=assignment.activity_id,

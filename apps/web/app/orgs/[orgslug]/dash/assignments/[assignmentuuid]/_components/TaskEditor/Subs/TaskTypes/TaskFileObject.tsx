@@ -244,16 +244,10 @@ export default function TaskFileObject({ view, user_id, assignmentTaskUUID, onGr
     }
 
     async function gradeCustomFC(grade: number, feedback?: string) {
-        // Same guard as the sibling task types (TaskShortAnswerObject:259).
-        // Without an existing submission uuid the grade is written against the
-        // INSTRUCTOR's own row, where it is silently forced to 0 while the UI
-        // reports success — so refuse instead of grading a phantom submission.
-        if (!userSubmissions?.assignment_task_submission_uuid) {
-            toast.error(t('assignments.no_task_submission_to_grade', {
-                defaultValue: 'This student has not submitted a file for this task yet.',
-            }));
-            return;
-        }
+        // If the file arrived outside LearnHouse, the explicit learner target
+        // lets the backend create a manual, file-only grading row safely. The
+        // server still requires an existing assignment-level submission and
+        // refuses to guess a learner from the instructor session.
         await applyManualGrade({
             grade,
             feedback,
@@ -263,6 +257,7 @@ export default function TaskFileObject({ view, user_id, assignmentTaskUUID, onGr
             accessToken: access_token,
             username: session?.data?.user?.username,
             assignmentTaskSubmissionUUID: userSubmissions?.assignment_task_submission_uuid,
+            targetUserId: user_id,
             taskSubmissionPayload: userSubmissions,
             onSuccess: () => { getAssignmentTaskSubmissionFromIdentifiedUserUI(); onGraded?.(); },
         });

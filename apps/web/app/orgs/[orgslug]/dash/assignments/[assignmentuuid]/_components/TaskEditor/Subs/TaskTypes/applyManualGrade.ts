@@ -26,6 +26,8 @@ interface ApplyManualGradeArgs {
     accessToken: string
     username?: string | null
     assignmentTaskSubmissionUUID?: string | null
+    /** Explicit learner target used only for instructor-recorded external files. */
+    targetUserId?: string | null
     /**
      * Value persisted into the `task_submission` JSON field on the server. Each
      * task type stores a slightly different shape here, so callers pass it in.
@@ -43,6 +45,7 @@ export async function applyManualGrade({
     accessToken,
     username,
     assignmentTaskSubmissionUUID,
+    targetUserId,
     taskSubmissionPayload,
     onSuccess,
 }: ApplyManualGradeArgs): Promise<ManualGradeResult> {
@@ -59,7 +62,7 @@ export async function applyManualGrade({
     // API falls back to a branch keyed on the SUBMITTER — the instructor —
     // creating a phantom instructor-owned row that is forced to 0 while the UI
     // cheerfully reported "Task graded successfully". Refuse loudly instead.
-    if (!assignmentTaskSubmissionUUID) {
+    if (!assignmentTaskSubmissionUUID && !targetUserId) {
         toast.error(i18n.t('dashboard.assignments.editor.toasts.no_submission_to_grade', {
             defaultValue: 'This student has no submission for this task yet, there is nothing to grade.',
         }))
@@ -81,6 +84,7 @@ export async function applyManualGrade({
         assignmentTaskUUID,
         assignmentUUID,
         accessToken,
+        targetUserId ?? undefined,
     )
     if (res.success) {
         onSuccess()

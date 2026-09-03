@@ -122,10 +122,14 @@ export async function handleAssignmentTaskSubmission(
   body: any,
   assignmentTaskUUID: string,
   assignmentUUID: string,
-  access_token: string
+  access_token: string,
+  onBehalfOfUserId?: string
 ) {
+  const targetQuery = onBehalfOfUserId
+    ? `?on_behalf_of_user_id=${encodeURIComponent(onBehalfOfUserId)}`
+    : ''
   const result: any = await fetch(
-    `${getAPIUrl()}assignments/${assignmentUUID}/tasks/${assignmentTaskUUID}/submissions`,
+    `${getAPIUrl()}assignments/${assignmentUUID}/tasks/${assignmentTaskUUID}/submissions${targetQuery}`,
     RequestBodyWithAuthHeader('PUT', body, null, access_token)
   )
   const res = await getResponseMetadata(result)

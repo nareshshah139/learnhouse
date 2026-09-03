@@ -62,6 +62,32 @@ test('teacher sets a custom numeric per-task grade (70) and it persists', async 
   expect(grade.percentage).toBe(70)
 })
 
+test('teacher records a 70 grade for a file supplied outside LearnHouse', async ({ page }) => {
+  const seeded = await seedAssignment(token, org, {
+    courseName: 'E2E External File Grade Course',
+    assignmentTitle: 'External File Grade',
+    autoGrading: false,
+    tasks: [
+      { title: 'Externally supplied archive', assignment_type: 'FILE_SUBMISSION', contents: {} },
+    ],
+  })
+  const stu = sharedStudent()
+  const stoken = await login(stu.email, stu.password)
+
+  // Create the assignment-level hand-in but deliberately no task row. This
+  // matches imports where the attachment was delivered outside LearnHouse.
+  await submitAssignment(stoken, seeded.assignmentUuid)
+
+  const subs = new TeacherSubmissionsPage(page)
+  await subs.open(seeded.assignmentUuid.replace(/^assignment_/, ''))
+  const modal = await subs.evaluateFirst()
+  await modal.gradeFirstTaskNumeric(70)
+  await modal.setFinalGrade()
+
+  const grade = await getUserGrade(seeded.assignmentUuid, stu.id, token)
+  expect(grade.percentage).toBe(70)
+})
+
 test('teacher uses the Half shortcut → 50', async ({ page }) => {
   const { seeded, studentId } = await seedSubmitted('Override Half')
   const subs = new TeacherSubmissionsPage(page)

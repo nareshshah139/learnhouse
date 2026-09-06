@@ -95,6 +95,7 @@ async def test_candidates_and_deleted_comment(db, org, discussion, admin_user, r
         await create_mentions(None, db, admin_user, discussion, 'comment_test', '@regular')
         await db.commit()
         assert len(await notifications(None, org.id, regular_user, db)) == 1
+        assert (await notifications(None, org.id, regular_user, db))[0]['preview'] == '@regular'
         await db.delete(comment)
         await db.commit()
         assert await notifications(None, org.id, regular_user, db) == []

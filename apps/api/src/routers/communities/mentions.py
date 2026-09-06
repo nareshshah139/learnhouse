@@ -9,7 +9,7 @@ from src.db.communities.communities import Community
 from src.db.communities.discussions import Discussion
 from src.db.communities.discussion_comments import DiscussionComment
 from src.db.communities.mention_notifications import MentionNotification
-from src.services.communities.mentions import can_read
+from src.services.communities.mentions import can_read, visible_text
 
 router = APIRouter()
 
@@ -44,25 +44,32 @@ async def candidates(community_uuid: str, request: Request, q: str = Query('', m
 async def notifications(request: Request, org_id: int, current_user=Depends(get_current_user),
                         db: AsyncSession = Depends(get_db_session)):
     require_person(current_user)
-    rows = (await db.execute(select(MentionNotification).join(Community, Community.id == MentionNotification.community_id).where(
+    rows = (await db.execute(select(MentionNotification, Community, Discussion, User)
+        .join(Community, Community.id == MentionNotification.community_id)
+        .join(Discussion, Discussion.id == MentionNotification.discussion_id)
+        .join(User, User.id == MentionNotification.actor_id).where(
         MentionNotification.recipient_id == current_user.id, Community.org_id == org_id
-    ).order_by(MentionNotification.id.desc()).limit(100))).scalars().all()
+    ).order_by(MentionNotification.id.desc()).limit(100))).all()
+    comment_uuids = [row.source_uuid for row, *_ in rows if row.source_uuid.startswith('comment_')]
+    comments = {comment.comment_uuid: comment for comment in (await db.execute(
+        select(DiscussionComment).where(DiscussionComment.comment_uuid.in_(comment_uuids)))).scalars().all()} if comment_uuids else {}
+    access = {}
     result = []
-    for row in rows:
-        community = await db.get(Community, row.community_id)
-        if not community or not await can_read(request, db, current_user, community):
+    for row, community, discussion, actor in rows:
+        if community.id not in access:
+            access[community.id] = await can_read(request, db, current_user, community)
+        if not access[community.id]:
             continue
-        discussion = await db.get(Discussion, row.discussion_id)
-        actor = await db.get(User, row.actor_id)
-        if not discussion or not actor:
-            continue
+        content = discussion.content
         if row.source_uuid.startswith('comment_'):
-            source = (await db.execute(select(DiscussionComment).where(DiscussionComment.comment_uuid == row.source_uuid))).scalars().first()
+            source = comments.get(row.source_uuid)
             if not source:
                 continue
+            content = source.content
         result.append({'id': row.id, 'read': row.read, 'created_at': row.created_at,
             'actor': f'{actor.first_name} {actor.last_name}'.strip() or actor.username,
             'title': discussion.title,
+            'preview': ' '.join(visible_text(content).split())[:180],
             'href': f'/community/{community.community_uuid.removeprefix("community_")}/discussion/{discussion.discussion_uuid.removeprefix("discussion_")}#{row.source_uuid}'})
     return result
 

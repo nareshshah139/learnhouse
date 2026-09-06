@@ -10,9 +10,9 @@ from src.db.communities.mention_notifications import MentionNotification
 from src.security.rbac import check_resource_access, AccessAction
 
 
-def mention_names(content):
+def visible_text(content):
     if not content:
-        return set()
+        return ''
     def visible(node):
         if not isinstance(node, dict) or node.get('type') in ('codeBlock', 'code'):
             return ''
@@ -25,7 +25,11 @@ def mention_names(content):
         doc = None
     text = visible(doc) if isinstance(doc, dict) and doc.get('type') == 'doc' else content
     text = re.sub(r'```[\s\S]*?```|`[^`]*`', '', text)
-    return {m.rstrip('.-').casefold() for m in re.findall(r'(?<![\w@/])@([\w][\w.-]{0,99})(?![\w@])', text)}
+    return text
+
+
+def mention_names(content):
+    return {m.rstrip('.-').casefold() for m in re.findall(r'(?<![\w@/])@([\w][\w.-]{0,99})(?![\w@])', visible_text(content))}
 
 
 async def can_read(request, db, user, community):

@@ -2,6 +2,7 @@
 import React, { useState } from 'react'
 import { useEditor, EditorContent, Editor } from '@tiptap/react'
 import { MentionSuggestions, mentionAtCursor } from './MentionSuggestions'
+import { MentionHighlight } from './MentionHighlight'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -61,6 +62,7 @@ export function DiscussionEditor({
   }
   const editor = useEditor({
     extensions: [
+      MentionHighlight,
       StarterKit.configure({
         // Disable link since we configure it separately below
         link: false,

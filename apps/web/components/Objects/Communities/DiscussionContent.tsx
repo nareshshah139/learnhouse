@@ -3,6 +3,7 @@ import React from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
+import { MentionHighlight, MentionText } from './MentionHighlight'
 
 interface DiscussionContentProps {
   content: any
@@ -17,7 +18,7 @@ export function DiscussionContent({ content }: DiscussionContentProps) {
   if (typeof content === 'string') {
     return (
       <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
-        {content}
+        <MentionText text={content} />
       </p>
     )
   }
@@ -33,6 +34,7 @@ export function DiscussionContent({ content }: DiscussionContentProps) {
 function DiscussionContentEditor({ content }: { content: any }) {
   const editor = useEditor({
     extensions: [
+      MentionHighlight,
       StarterKit.configure({
         // Disable link since we configure it separately below
         link: false,

@@ -7,7 +7,7 @@ import { getAPIUrl, getUriWithOrg } from '@services/config/config'
 import { RequestBodyWithAuthHeader } from '@services/utils/ts/requests'
 import Link from 'next/link'
 
-type Notification = { id: number; read: boolean; actor: string; title: string; href: string }
+type Notification = { id: number; read: boolean; actor: string; title: string; href: string; preview?: string }
 export function MentionNotifications() {
   const session = useLHSession() as any
   const org = useOrg() as any
@@ -28,7 +28,7 @@ export function MentionNotifications() {
       } catch { if (!stale) setError(true) }
     }
     load()
-    const timer = setInterval(load, 30000)
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') load() }, 5000)
     return () => { stale = true; clearInterval(timer) }
   }, [token, org?.id, open])
   if (!token) return null
@@ -46,6 +46,7 @@ export function MentionNotifications() {
       {items.map(item => <div key={item.id} className={`p-2 rounded-lg mt-1 ${item.read ? '' : 'bg-blue-50'}`}>
         <Link className="block text-sm" href={getUriWithOrg(org.slug, item.href)} onClick={() => setOpen(false)}>
           <strong>{item.actor}</strong> mentioned you in <span className="underline">{item.title}</span>
+          {item.preview && <p className="text-gray-600 mt-1 line-clamp-3">{item.preview}</p>}
         </Link>
         {!item.read && <button type="button" className="text-xs text-blue-700 mt-1" onClick={async () => {
           try {

@@ -1,5 +1,6 @@
 'use client'
 import { MentionTextarea } from './MentionTextarea'
+import { MentionText } from './MentionHighlight'
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
@@ -206,7 +207,7 @@ export function CommentCard({ comment, canManage = false, onDeleted, onUpdated }
                   <span className="text-gray-400 text-xs">{timeAgo}</span>
                 </div>
                 <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                  {comment.content}
+                  <MentionText text={comment.content} />
                 </p>
               </>
             )}

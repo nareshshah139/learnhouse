@@ -148,6 +148,8 @@ async def create_discussion(
         creation_date=str(datetime.now()),
     )
     db_session.add(vote)
+    from src.services.communities.mentions import create_mentions
+    await create_mentions(request, db_session, current_user, discussion, discussion.discussion_uuid, discussion.content)
 
     await db_session.commit()
     await db_session.refresh(discussion)
@@ -436,6 +438,8 @@ async def update_discussion(
     discussion.update_date = str(datetime.now())
 
     db_session.add(discussion)
+    from src.services.communities.mentions import create_mentions
+    await create_mentions(request, db_session, current_user, discussion, discussion.discussion_uuid, discussion.content)
     await db_session.commit()
     await db_session.refresh(discussion)
 

@@ -12,6 +12,7 @@ import {
   DiscussionCommentWithAuthor,
 } from '@services/communities/discussions'
 import { CommentCard } from './CommentCard'
+import { MentionTextarea } from './MentionTextarea'
 import { useLHAnalytics, AnalyticsEvent } from '@services/analytics'
 
 interface CommentSectionProps {
@@ -37,6 +38,12 @@ export function CommentSection({ discussionUuid, communityUuid, isLocked = false
   const [isFocused, setIsFocused] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (!isLoading && window.location.hash.startsWith('#comment_')) {
+      document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: 'center' })
+    }
+  }, [isLoading, comments])
 
   useEffect(() => {
     let stale = false
@@ -163,7 +170,8 @@ export function CommentSection({ discussionUuid, communityUuid, isLocked = false
                     ? 'border-gray-300'
                     : 'border-gray-200'
               }`}>
-                <textarea
+                <MentionTextarea
+                  communityUuid={communityUuid}
                   ref={textareaRef}
                   value={newComment}
                   onChange={(e) => {

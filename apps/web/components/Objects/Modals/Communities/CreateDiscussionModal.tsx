@@ -224,6 +224,7 @@ export function CreateDiscussionModal({
               {t('communities.create_discussion.details_label')}
             </label>
             <DiscussionEditor
+              communityUuid={communityUuid}
               content={content}
               onChange={setContent}
               placeholder={t('communities.create_discussion.details_placeholder')}

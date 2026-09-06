@@ -26,6 +26,7 @@ from src.routers.folders import folders as folders_router_module
 from src.routers.media import media as media_router_module
 from src.routers.courses import migration as migration_router_module
 from src.routers.communities import communities as communities_router_module
+from src.routers.communities import mentions as mentions_router_module
 from src.routers.communities import discussions as discussions_router_module
 from src.routers.courses.activities import activities, blocks
 from src.routers.podcasts import podcasts as podcasts_router_module
@@ -86,6 +87,7 @@ v1_router.include_router(
         Depends(require_plan_for_usergroups("standard", "User Groups")),
     ],
 )
+v1_router.include_router(mentions_router_module.router, tags=["mentions"])
 v1_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 # Two-factor: enrollment/management plus the /auth/login/mfa challenge.
 v1_router.include_router(mfa_router_module.router, prefix="/auth", tags=["auth"])

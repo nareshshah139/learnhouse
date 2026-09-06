@@ -103,7 +103,7 @@ export function DiscussionDetail({
   }
 
   return (
-    <div className="bg-white nice-shadow rounded-lg overflow-hidden">
+    <div id={discussion.discussion_uuid} className="bg-white nice-shadow rounded-lg overflow-hidden">
       {/* Header */}
       <div className="p-6 pb-0">
         {/* Title Row */}

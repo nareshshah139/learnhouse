@@ -1,6 +1,7 @@
 'use client'
-import React from 'react'
-import { useEditor, EditorContent } from '@tiptap/react'
+import React, { useState } from 'react'
+import { useEditor, EditorContent, Editor } from '@tiptap/react'
+import { MentionSuggestions, mentionAtCursor } from './MentionSuggestions'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -8,10 +9,11 @@ import { Bold, Italic, Strikethrough, Code, Link as LinkIcon, List, ListOrdered,
 
 interface DiscussionEditorProps {
   content: any
-  onChange: (content: any) => void
+  onChange: (_content: any) => void
   placeholder?: string
   editable?: boolean
   minHeight?: string
+  communityUuid?: string
 }
 
 // Defined at module level so React keeps the same component identity across
@@ -48,7 +50,15 @@ export function DiscussionEditor({
   placeholder = 'Write your discussion...',
   editable = true,
   minHeight = '150px',
+  communityUuid,
 }: DiscussionEditorProps) {
+  const [mention, setMention] = useState<{ query: string; from: number; to: number } | null>(null)
+  const updateMention = (editor: Editor) => {
+    const { $from, empty } = editor.state.selection
+    const match = empty && !editor.isActive('code') && !editor.isActive('codeBlock')
+      ? mentionAtCursor($from.parent.textBetween(0, $from.parentOffset, undefined, ' ')) : null
+    setMention(match ? { query: match[1], from: $from.pos - match[1].length - 1, to: $from.pos } : null)
+  }
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -91,7 +101,9 @@ export function DiscussionEditor({
     content: content || '',
     editable,
     immediatelyRender: false,
+    onSelectionUpdate: ({ editor }) => updateMention(editor),
     onUpdate: ({ editor }) => {
+      updateMention(editor)
       const json = editor.getJSON()
       onChange(json)
     },
@@ -202,6 +214,11 @@ export function DiscussionEditor({
         className={`discussion-editor-content ${editable ? 'rounded-b-lg' : 'rounded-lg'}`}
         style={{ minHeight: editable ? minHeight : 'auto' }}
       />
+      {editable && <MentionSuggestions communityUuid={communityUuid} query={mention?.query ?? null} onSelect={username => {
+        if (!mention) return
+        editor.chain().focus().insertContentAt({ from: mention.from, to: mention.to }, { type: 'text', text: `@${username} ` }).run()
+        setMention(null)
+      }} />}
 
       <style jsx global>{`
         .discussion-editor-content {

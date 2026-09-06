@@ -8,6 +8,7 @@ import { queryKeys } from '@/lib/query/keys'
 import { getUriWithOrg } from '@services/config/config'
 import { fetchRAGChatSessions, RAGChatSession } from '@services/ai/ai'
 import { HeaderProfileBox } from '@components/Security/HeaderProfileBox'
+import { MentionNotifications } from '@components/Objects/Communities/MentionNotifications'
 import MenuLinks from './OrgMenuLinks'
 import { getOrgLogoMediaDirectory } from '@services/media/media'
 import { useLHSession } from '@components/Contexts/LHSessionContext'
@@ -360,6 +361,7 @@ export const OrgMenu = (props: any) => {
             )}
 
             <div className="hidden md:flex">
+              <MentionNotifications />
               <HeaderProfileBox primaryColor={primaryColor} />
             </div>
             <button
@@ -397,6 +399,7 @@ export const OrgMenu = (props: any) => {
             <MenuLinks orgslug={orgslug} />
           </div>
           <div className="border-t border-gray-200">
+            <MentionNotifications />
             <HeaderProfileBox />
           </div>
         </div>

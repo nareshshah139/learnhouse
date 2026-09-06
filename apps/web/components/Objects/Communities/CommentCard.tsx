@@ -1,4 +1,5 @@
 'use client'
+import { MentionTextarea } from './MentionTextarea'
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
@@ -128,6 +129,7 @@ export function CommentCard({ comment, canManage = false, onDeleted, onUpdated }
 
   return (
     <div
+      id={comment.comment_uuid}
       className="group flex items-center gap-4 py-3 px-4 transition-colors border-b border-gray-100 last:border-b-0 hover:bg-gray-50/50"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -167,7 +169,7 @@ export function CommentCard({ comment, canManage = false, onDeleted, onUpdated }
                     <span>{error}</span>
                   </div>
                 )}
-                <textarea
+                <MentionTextarea
                   value={editContent}
                   onChange={(e) => {
                     setEditContent(e.target.value)

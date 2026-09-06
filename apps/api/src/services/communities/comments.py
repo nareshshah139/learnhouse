@@ -17,6 +17,7 @@ from src.services.communities.comment_votes import get_user_votes_for_comments
 from src.security.rbac import check_resource_access, AccessAction, authorization_verify_if_user_is_anon
 from src.services.communities.moderation import validate_comment_content, enforce_auto_lock
 from src.services.webhooks.dispatch import dispatch_webhooks
+from src.services.communities.mentions import create_mentions
 
 
 async def create_comment(
@@ -80,6 +81,8 @@ async def create_comment(
     )
 
     db_session.add(comment)
+    await db_session.flush()
+    await create_mentions(request, db_session, current_user, discussion, comment.comment_uuid, comment.content)
     await db_session.commit()
     await db_session.refresh(comment)
 
@@ -227,6 +230,8 @@ async def update_comment(
     comment.update_date = str(datetime.now())
 
     db_session.add(comment)
+    if discussion:
+        await create_mentions(request, db_session, current_user, discussion, comment.comment_uuid, comment.content)
     await db_session.commit()
     await db_session.refresh(comment)
 

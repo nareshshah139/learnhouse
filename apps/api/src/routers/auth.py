@@ -51,6 +51,10 @@ from src.services.users.email_verification import (
     resend_verification_email,
 )
 from src.services.auth.session import issue_session_or_challenge
+from src.security.credential_stamp import (
+    CREDENTIAL_CLAIM, carried_credential_stamp, credential_is_current,
+    password_fingerprint, token_issued_at,
+)
 from src.security.session_context import (
     AUTH_METHOD_GOOGLE,
     AUTH_METHOD_PASSWORD,
@@ -349,22 +353,11 @@ async def refresh(
 
     # Enforce password-change cutover: tokens minted before the user's last
     # password change are stale.
-    iat_raw = payload.get("iat")
-    issued_at = None
-    if iat_raw:
-        try:
-            issued_at = datetime.fromtimestamp(iat_raw, tz=timezone.utc)
-        except (TypeError, ValueError, OSError):
-            issued_at = None
-
-    pca_raw = getattr(user, "password_changed_at", None)
-    if isinstance(pca_raw, datetime) and issued_at is not None:
-        pca = pca_raw if pca_raw.tzinfo else pca_raw.replace(tzinfo=timezone.utc)
-        if issued_at < pca:
-            _log_refresh_outcome(
-                "password_changed", user_id=user.id, token_age_seconds=_token_age_seconds(payload)
-            )
-            raise credentials_exception
+    issued_at = token_issued_at(payload)
+    if not credential_is_current(payload, user):
+        _log_refresh_outcome("password_changed", user_id=user.id, token_age_seconds=_token_age_seconds(payload))
+        raise credentials_exception
+    credential_stamp = carried_credential_stamp(payload, user)
 
     if _is_token_revoked_for_user(user.id, issued_at):
         # The user's sessions were revoked after this token was issued — by an
@@ -421,6 +414,7 @@ async def refresh(
         # claim-less one that bypasses the org auth-method / sharing policy.
         # A session that records no method also picks up its grace deadline here.
         carried = carry_session_claims(payload)
+        carried[CREDENTIAL_CLAIM] = credential_stamp
         new_access_token = create_access_token(
             data={"sub": email, **carried},
             expires_delta=JWT_ACCESS_TOKEN_EXPIRES,
@@ -537,6 +531,8 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    verified_credential_stamp = password_fingerprint(user)
+
     # Password was correct. From here on, disclosing lockout/verification
     # state no longer enables enumeration since the caller has proven they
     # control the account.
@@ -593,7 +589,8 @@ async def login(
     # must complete /auth/login/mfa. No cookies and no user object are returned
     # on that branch: nothing is authenticated until the code is verified.
     issue = await issue_session_or_challenge(
-        db_session, user, amr=AUTH_METHOD_PASSWORD, org_id=session_org_id
+        db_session, user, amr=AUTH_METHOD_PASSWORD, org_id=session_org_id,
+        credential_stamp=verified_credential_stamp,
     )
     if issue.mfa_required:
         return {
@@ -862,6 +859,10 @@ async def third_party_login(
     # Google OAuth mints directly (it does not carry a second factor). Stamp the
     # session's provenance so the org auth-method / sharing policy can see it.
     google_claims = session_claims(AUTH_METHOD_GOOGLE, org_id)
+    credential_user = (await db_session.execute(select(User).where(User.id == user.id))).scalars().first()
+    if credential_user is None:
+        raise HTTPException(401, "Invalid credentials")
+    google_claims[CREDENTIAL_CLAIM] = password_fingerprint(credential_user)
     access_token = create_access_token(
         data={"sub": user.email, "purpose": "session", **google_claims},
         expires_delta=JWT_ACCESS_TOKEN_EXPIRES

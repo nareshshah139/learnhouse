@@ -11,6 +11,7 @@ from src.routers import usergroups
 from src.routers import dev, trail, users, auth, orgs, roles, search
 from src.routers import mfa as mfa_router_module
 from src.routers import monitoring
+from src.routers import recovery
 from src.routers import stream
 from src.routers import api_tokens
 from src.routers import webhooks
@@ -48,6 +49,7 @@ from src.security.features_utils.plan_check import require_plan, require_plan_fo
 
 
 v1_router = APIRouter(prefix="/api/v1")
+v1_router.include_router(recovery.router, prefix="/users/recovery-links", tags=["users"])
 
 # Helper dependency to reject API token access (still admits AnonymousUser —
 # use on routers that contain at least one deliberately-public endpoint).

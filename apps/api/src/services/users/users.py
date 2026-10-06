@@ -682,8 +682,7 @@ async def update_user_password(
             },
         )
 
-    # Get user (we already verified it's the current user)
-    statement = select(User).where(User.id == user_id)
+    statement = select(User).where(User.id == user_id).with_for_update().execution_options(populate_existing=True)
     user = (await db_session.execute(statement)).scalars().first()
 
     if not user:
@@ -700,6 +699,7 @@ async def update_user_password(
 
     # Update user
     user.password = security_hash_password(form.new_password)
+    user.password_changed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     user.update_date = str(datetime.now())
 
     # Update user in database

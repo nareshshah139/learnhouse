@@ -24,6 +24,7 @@ from src.core.middleware.cors import configure_cors
 from src.router import v1_router
 from src.routers.content_files import router as content_files_router
 from src.routers.local_content import router as local_content_router
+from src.security.recovery_privacy import is_recovery_event, recovery_request
 
 
 learnhouse_config: LearnHouseConfig = get_learnhouse_config()
@@ -35,6 +36,8 @@ _HEALTH_TRANSACTIONS = ("/api/v1/health", "/health")
 
 
 def _before_send(event, hint):
+    if is_recovery_event(event):
+        return None
     transaction = event.get("transaction") or ""
     if transaction in _HEALTH_TRANSACTIONS:
         return None
@@ -58,6 +61,8 @@ if learnhouse_config.general_config.sentry_config.dsn:
         profile_session_sample_rate=1.0 if learnhouse_config.general_config.development_mode else 0.1,
         profile_lifecycle="trace",
         before_send=_before_send,
+        before_send_transaction=lambda event, hint: None if is_recovery_event(event) else event,
+        before_send_log=lambda log, hint: None if recovery_request.get() else log,
         integrations=[
             LoggingIntegration(
                 level=logging.INFO,
@@ -80,8 +85,8 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 register_ee_middlewares(app)
 
 # Lifecycle
-app.add_event_handler("startup", startup_app(app))
-app.add_event_handler("shutdown", shutdown_app(app))
+app.router.on_startup.append(startup_app(app))
+app.router.on_shutdown.append(shutdown_app(app))
 
 # Content delivery — S3-aware router when S3 is enabled, local otherwise.
 # Both paths enforce access control; neither serves raw StaticFiles.

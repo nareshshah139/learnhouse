@@ -25,6 +25,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
 import { readSignupFields } from '@services/settings/org'
 import { useTranslation } from 'react-i18next'
+import RecoveryLinkDialog, { RecoveryRecipient } from './RecoveryLinkDialog'
+import { markDocumentRecoverySensitive } from '@services/auth/recoveryPrivacy'
 import {
   Select,
   SelectContent,
@@ -81,6 +83,8 @@ function OrgUsers() {
   // Per-student analytics (integrated into this Users list)
   const [analyticsUserId, setAnalyticsUserId] = useState<number | null>(null)
   const [comparing, setComparing] = useState(false)
+  const [recoveryUser, setRecoveryUser] = useState<RecoveryRecipient | null>(null)
+  const strictAdmin = session?.data?.roles?.some((entry: { org?: { id: number }; role?: { id: number } }) => entry.org?.id === org?.id && entry.role?.id === 1) === true
 
   const buildQuery = () => {
     const params = new URLSearchParams()
@@ -741,6 +745,11 @@ function OrgUsers() {
                         {/* Actions */}
                         <td className="px-6 py-4 text-right">
                           <div className="inline-flex items-center gap-1.5">
+                            {strictAdmin && user.role?.id === 4 && user.role?.role_uuid === 'role_global_user' && !user.user.is_superadmin && user.user.id !== session?.data?.user?.id && (!user.user.signup_method || user.user.signup_method === 'email') && <button
+                              type="button"
+                              onClick={() => { markDocumentRecoverySensitive(); setRecoveryUser(user.user) }}
+                              className="ph-no-capture inline-flex items-center h-8 px-3 bg-white text-gray-600 hover:bg-gray-100 rounded-md text-xs font-medium nice-shadow"
+                            >Recovery link</button>}
                             <button
                               onClick={() => setAnalyticsUserId(user.user.id)}
                               className="inline-flex items-center gap-1.5 h-8 px-3 bg-white text-gray-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-md text-xs font-medium nice-shadow transition-all"
@@ -826,6 +835,7 @@ function OrgUsers() {
 
       {/* Per-student analytics (integrated into the Users tab) */}
       <UserDossierModal userId={analyticsUserId} onOpenChange={(o) => !o && setAnalyticsUserId(null)} />
+      {recoveryUser && <RecoveryLinkDialog key={recoveryUser.id} recipient={recoveryUser} orgId={org.id} accessToken={access_token} onClose={() => setRecoveryUser(null)} />}
       <Dialog open={comparing} onOpenChange={setComparing}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto bg-[#f8f8f8] p-6 sm:p-8">
           <h2 className="font-bold text-xl tracking-tight mb-4">{t('dashboard.users.analytics.compare_students')}</h2>

@@ -23,6 +23,7 @@ from src.db.users import User
 from src.security.auth import create_access_token, create_refresh_token, decode_jwt
 from src.security.session_context import AMR_CLAIM, SORG_CLAIM, session_claims
 from src.services.auth.mfa import is_mfa_active
+from src.security.credential_stamp import CREDENTIAL_CLAIM, password_fingerprint
 
 MFA_PENDING_PURPOSE = "mfa_pending"
 # Long enough to open an authenticator app and read a code, short enough that a
@@ -42,13 +43,15 @@ class SessionIssueResult:
 
 
 def create_mfa_pending_token(
-    email: str, amr: Optional[str] = None, org_id: Optional[int] = None
+    email: str, amr: Optional[str] = None, org_id: Optional[int] = None,
+    credential_stamp: Optional[str] = None,
 ) -> str:
     """Mint the interim token. It carries the session's provenance (``amr`` /
     ``sorg``) so that when the second factor is completed at ``/auth/login/mfa``
     the real session is minted with the same method and org it was started for."""
     return create_access_token(
-        data={"sub": email, "purpose": MFA_PENDING_PURPOSE, **session_claims(amr, org_id)},
+        data={"sub": email, "purpose": MFA_PENDING_PURPOSE, **session_claims(amr, org_id),
+              **({CREDENTIAL_CLAIM: credential_stamp} if credential_stamp is not None else {})},
         expires_delta=MFA_PENDING_TTL,
     )
 
@@ -81,7 +84,8 @@ def decode_mfa_pending_provenance(token: str) -> tuple[Optional[str], Optional[i
 
 
 def mint_session_tokens(
-    email: str, amr: Optional[str] = None, org_id: Optional[int] = None
+    email: str, amr: Optional[str] = None, org_id: Optional[int] = None,
+    credential_stamp: Optional[str] = None,
 ) -> SessionIssueResult:
     """Mint a real session unconditionally. Only for callers that have already
     satisfied (or deliberately bypassed) the second factor.
@@ -91,6 +95,8 @@ def mint_session_tokens(
     per-org auth-method / session-sharing policy can evaluate the session later.
     """
     claims = session_claims(amr, org_id)
+    if credential_stamp is not None:
+        claims[CREDENTIAL_CLAIM] = credential_stamp
     return SessionIssueResult(
         mfa_required=False,
         access_token=create_access_token(data={"sub": email, "purpose": "session", **claims}),
@@ -103,13 +109,15 @@ async def issue_session_or_challenge(
     user: User,
     amr: Optional[str] = None,
     org_id: Optional[int] = None,
+    credential_stamp: Optional[str] = None,
 ) -> SessionIssueResult:
     """Mint a session, unless the user has a confirmed second factor — in which
     case mint a short-lived pending token instead and demand a code. Provenance
     (``amr`` / ``org_id``) is carried through both branches."""
+    stamp = credential_stamp if credential_stamp is not None else password_fingerprint(user)
     if await is_mfa_active(db_session, user.id):
         return SessionIssueResult(
             mfa_required=True,
-            mfa_token=create_mfa_pending_token(user.email, amr, org_id),
+            mfa_token=create_mfa_pending_token(user.email, amr, org_id, stamp),
         )
-    return mint_session_tokens(user.email, amr, org_id)
+    return mint_session_tokens(user.email, amr, org_id, stamp)

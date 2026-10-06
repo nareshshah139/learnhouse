@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
+import { isRecoveryEvent, isRecoveryPath, isRecoveryPrivate } from './services/auth/recoveryPrivacy';
 
 const rc = typeof window !== 'undefined' ? (window as any).__RUNTIME_CONFIG__ || {} : {};
 const SENTRY_DSN = rc.NEXT_PUBLIC_LEARNHOUSE_SENTRY_DSN || process.env.NEXT_PUBLIC_LEARNHOUSE_SENTRY_DSN;
@@ -15,7 +16,12 @@ if (SENTRY_DSN) {
     replaysSessionSampleRate: 0.0,
     replaysOnErrorSampleRate: 0.1,
     integrations: [
-      Sentry.replayIntegration(),
+      Sentry.replayIntegration({
+        block: ['[data-recovery-private]'],
+        networkDetailDenyUrls: [/\/api\/recovery\//, /\/recovery-links\//],
+        beforeAddRecordingEvent: (event) => isRecoveryPrivate() ? null : event,
+        beforeErrorSampling: () => !isRecoveryPrivate(),
+      }),
     ],
     // Errors thrown by code we don't ship. Wallet/password-manager extensions
     // inject scripts into every page, and when their own message ports die the
@@ -42,6 +48,7 @@ if (SENTRY_DSN) {
       /\/inpage\.js/i,
     ],
     beforeSend(event, hint) {
+      if (isRecoveryEvent(event)) return null;
       const msg =
         (hint?.originalException as Error)?.message ??
         event?.exception?.values?.[0]?.value ??
@@ -62,5 +69,8 @@ if (SENTRY_DSN) {
 
       return event;
     },
+    beforeSendTransaction: (event) => isRecoveryEvent(event) ? null : event,
+    beforeSendLog: (log) => isRecoveryPrivate() ? null : log,
+    beforeBreadcrumb: (breadcrumb) => isRecoveryPrivate() || isRecoveryPath(breadcrumb.data?.url) ? null : breadcrumb,
   });
 }

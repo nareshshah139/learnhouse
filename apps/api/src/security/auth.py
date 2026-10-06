@@ -15,6 +15,7 @@ from jwt.exceptions import PyJWTError
 from datetime import datetime, timedelta, timezone
 from src.services.users.users import security_verify_password
 from src.security.security import ALGORITHM, SECRET_KEY, security_hash_password
+from src.security.credential_stamp import credential_is_current, token_issued_at
 from src.security.session_context import (
     AMR_CLAIM,
     AUTH_METHOD_API_TOKEN,
@@ -126,7 +127,7 @@ def decode_jwt(token: str) -> Optional[dict]:
             options=decode_options
         )
         return payload
-    except PyJWTError:
+    except (PyJWTError, TypeError, ValueError, OverflowError):
         return None
 
 
@@ -331,7 +332,7 @@ def decode_refresh_token(token: str) -> Optional[dict]:
         if payload.get("type") != "refresh":
             return None
         return payload
-    except PyJWTError:
+    except (PyJWTError, TypeError, ValueError, OverflowError):
         return None
 
 
@@ -608,24 +609,9 @@ async def get_current_user(
         if user is None:
             raise credentials_exception
 
-        token_iat_raw = payload.get("iat") if token else None
-        issued_at: Optional[datetime] = None
-        if token_iat_raw:
-            try:
-                issued_at = datetime.fromtimestamp(token_iat_raw, tz=timezone.utc)
-            except (TypeError, ValueError, OSError, OverflowError):
-                issued_at = None
-
-        # If the user changed their password after this token was issued, the
-        # token is stale and must be rejected to force re-authentication.
-        pca_raw = getattr(user, "password_changed_at", None)
-        if isinstance(pca_raw, datetime) and issued_at is not None:
-            if pca_raw.tzinfo is None:
-                pca = pca_raw.replace(tzinfo=timezone.utc)
-            else:
-                pca = pca_raw
-            if issued_at < pca:
-                raise credentials_exception
+        issued_at = token_issued_at(payload)
+        if not credential_is_current(payload, user):
+            raise credentials_exception
 
         # SECURITY: if the user logged out after this token was issued, reject
         # it. This closes the "stolen token survives logout for its TTL" gap
@@ -635,6 +621,7 @@ async def get_current_user(
 
         public_user = PublicUser(**user.model_dump())
         request.state.user = public_user
+        request.state.auth_payload = payload
         request.state.is_api_token = False
         # Publish this session's provenance (how the user authenticated, which
         # org the session was minted for) for the per-org auth-method policy.

@@ -46,6 +46,7 @@ from src.services.analytics.analytics import track
 from src.services.analytics import events as analytics_events
 from src.services.webhooks.dispatch import dispatch_webhooks
 from src.security.auth import create_access_token
+from src.security.credential_stamp import CREDENTIAL_CLAIM, password_fingerprint
 from src.security.features_utils.plan_check import get_org_plan
 from src.security.features_utils.plans import plan_meets_requirement
 from src.security.features_utils.usage import (
@@ -184,7 +185,7 @@ async def issue_user_token(
     # default 8-hour session token to limit blast radius if leaked.
     from datetime import timedelta
     access_token = create_access_token(
-        data={"sub": user.email},
+        data={"sub": user.email, CREDENTIAL_CLAIM: password_fingerprint(user)},
         expires_delta=timedelta(hours=1),
     )
     return {

@@ -45,9 +45,10 @@ from src.security.org_auth import is_org_admin
 from src.db.organization_config import OrganizationConfig
 from src.db.user_organizations import UserOrganization
 from src.routers.auth import get_token_expiry_ms, set_auth_cookies
+from src.security.credential_stamp import credential_is_current, carried_credential_stamp
+from src.security.auth import decode_jwt
 
 router = APIRouter()
-
 
 ### 🔒 Request models ##############################################################
 
@@ -411,12 +412,16 @@ async def api_login_mfa(
             detail={"code": "MFA_SESSION_EXPIRED", "message": "Please sign in again."},
         )
 
+    pending_payload = decode_jwt(form.mfa_token) or {}
+    if not credential_is_current(pending_payload, user):
+        raise HTTPException(401, {"code": "MFA_SESSION_EXPIRED", "message": "Please sign in again."})
+    credential_stamp = carried_credential_stamp(pending_payload, user)
     mfa = await get_user_mfa(db_session, user.id)
     if mfa is None or mfa.confirmed_at is None:
         # The factor was removed between password step and code step. Nothing
         # left to verify, so fall through to a normal session rather than
         # stranding the user at a challenge they can never satisfy.
-        result = mint_session_tokens(user.email, pending_amr, pending_org_id)
+        result = mint_session_tokens(user.email, pending_amr, pending_org_id, credential_stamp)
     else:
         accepted = False
         if form.is_backup_code:
@@ -441,7 +446,7 @@ async def api_login_mfa(
                 },
             )
 
-        result = mint_session_tokens(user.email, pending_amr, pending_org_id)
+        result = mint_session_tokens(user.email, pending_amr, pending_org_id, credential_stamp)
 
     set_auth_cookies(response, result.access_token, result.refresh_token, request)
 

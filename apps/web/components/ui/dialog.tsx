@@ -29,8 +29,8 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { closeDisabled?: boolean }
+>(({ className, children, closeDisabled = false, ...props }, ref) => (
   // NOTE: Overlay and Content are rendered as direct, sibling children of
   // DialogPortal. Radix wraps *each* child in <Presence> so it can defer
   // unmount until the exit animation finishes. Wrapping them in a single
@@ -67,6 +67,7 @@ const DialogContent = React.forwardRef<
     >
       {children}
       <DialogPrimitive.Close
+        disabled={closeDisabled}
         className="absolute right-4 top-4 p-1.5 rounded-lg bg-gray-100/80 text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:pointer-events-none"
         aria-label="Close dialog"
       >

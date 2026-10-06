@@ -1,3 +1,5 @@
+import { isRecoveryPath } from './services/auth/recoveryPrivacy'
+
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     await import("./sentry.server.config");
@@ -13,6 +15,7 @@ export const onRequestError = async (
   request: Request,
   context: { routerKind: string; routePath: string; routeType: string; revalidateReason?: string }
 ) => {
+  if (isRecoveryPath(context.routePath) || isRecoveryPath(request.url)) return;
   // Sentry is already initialized via sentry.server.config — just capture if active
   const Sentry = await import("@sentry/nextjs");
   if (Sentry.isInitialized()) {

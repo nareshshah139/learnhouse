@@ -5,6 +5,7 @@ import posthog from 'posthog-js'
 import { PostHogProvider as PHProvider, usePostHog } from 'posthog-js/react'
 import { getPOSTHOG_KEY_VAL } from '@services/config/config'
 import { useLHSession } from '@components/Contexts/LHSessionContext'
+import { isRecoveryPrivate } from '@services/auth/recoveryPrivacy'
 
 let initialized = false
 
@@ -22,10 +23,12 @@ function initPostHog(key: string) {
     capture_pageleave: true,
     // Session replay ON but privacy-safe: mask every input and all text so no
     // typed PII (and no on-screen content) leaks into recordings.
-    disable_session_recording: false,
+    disable_session_recording: isRecoveryPrivate(),
+    before_send: (event) => isRecoveryPrivate() ? null : event,
     session_recording: {
       maskAllInputs: true,
       maskTextSelector: '*',
+      blockSelector: '[data-recovery-private]',
     },
   })
 }

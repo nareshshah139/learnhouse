@@ -3,6 +3,7 @@ import React, { act } from 'react'
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { createRoot } from 'react-dom/client'
 import { Window } from 'happy-dom'
+import { testConfig } from './fixtures/config'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -12,9 +13,7 @@ mock.module('next/link', () => ({
   ),
 }))
 
-mock.module('@services/config/config', () => ({
-  getUriWithOrg: (_orgslug: string, path: string) => path,
-}))
+mock.module('@services/config/config', () => testConfig)
 
 const { default: CourseGradesLink } = await import(
   '../components/Pages/Courses/CourseGradesLink'

@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
+import { isRecoveryEvent } from './services/auth/recoveryPrivacy';
 
 // Edge runtime can't use fs — use process.env with non-NEXT_PUBLIC fallback (available at runtime)
 const SENTRY_DSN = process.env.NEXT_PUBLIC_LEARNHOUSE_SENTRY_DSN || process.env.LEARNHOUSE_SENTRY_DSN;
@@ -12,6 +13,7 @@ if (SENTRY_DSN) {
     enableLogs: true,
     tracesSampleRate: LEARNHOUSE_ENV === "dev" ? 1.0 : 0.1,
     beforeSend(event, hint) {
+      if (isRecoveryEvent(event)) return null;
       const msg =
         (hint?.originalException as Error)?.message ??
         event?.exception?.values?.[0]?.value ??
@@ -23,5 +25,6 @@ if (SENTRY_DSN) {
 
       return event;
     },
+    beforeSendTransaction: (event) => isRecoveryEvent(event) ? null : event,
   });
 }

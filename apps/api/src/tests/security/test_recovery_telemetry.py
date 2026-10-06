@@ -172,3 +172,41 @@ def test_sentry_url_filter_protects_events_after_recovery_context_has_ended(sent
     assert "late-control-retained" in payload
     assert "Injected secret-bearing late event" not in payload
     assert SECRET not in payload and PASSWORD not in payload
+
+
+async def test_sentry_drops_late_recovery_access_log_after_context_reset(privacy_app, sentry_runtime, monkeypatch, caplog):
+    r = sentry_runtime
+
+    async def redeemed(db, secret, new_password):
+        return {"message": "Password changed."}
+
+    monkeypatch.setattr(recovery_routes, "redeem_recovery_link", redeemed)
+    async with AsyncClient(transport=ASGITransport(app=privacy_app), base_url=ORIGIN) as client:
+        result = await client.post(REDEEM, headers={"Origin": ORIGIN}, json={
+            "secret": SECRET, "new_password": PASSWORD,
+        })
+    assert result.status_code == 200
+    assert recovery_request.get() is False
+
+    caplog.set_level(logging.INFO, logger="uvicorn.access")
+    access = logging.getLogger("uvicorn.access")
+    access.info('%s - "%s %s HTTP/%s" %d', "127.0.0.1:12345", "POST", REDEEM, "1.1", 200)
+    access.info('%s - "%s %s HTTP/%s" %d', "127.0.0.1:12345", "GET", "/ordinary", "1.1", 200)
+    r.client.flush(timeout=2)
+    payload = b"\n".join(envelope.serialize() for envelope in r.transport.envelopes).decode()
+    assert "GET /ordinary HTTP/1.1" in payload
+    assert "POST /api/v1/users/recovery-links/redeem HTTP/1.1" not in payload
+
+
+@pytest.mark.parametrize("attribute", ["url.full", "url.path", "http.url", "http.target"])
+def test_sentry_drops_late_recovery_url_attribute_logs(sentry_runtime, attribute):
+    r = sentry_runtime
+    assert recovery_request.get() is False
+    r.sdk.logger.info("late-recovery-url-log", attributes={attribute: ORIGIN + REDEEM})
+    r.sdk.logger.info("ordinary-url-log-retained", attributes={attribute: ORIGIN + "/ordinary"})
+    r.sdk.logger.info("unrelated-metadata-retained", attributes={"note": {"request": {"url": ORIGIN + REDEEM}}})
+    r.client.flush(timeout=2)
+    payload = b"\n".join(envelope.serialize() for envelope in r.transport.envelopes).decode()
+    assert "ordinary-url-log-retained" in payload
+    assert "unrelated-metadata-retained" in payload
+    assert "late-recovery-url-log" not in payload

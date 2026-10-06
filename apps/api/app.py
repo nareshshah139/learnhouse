@@ -24,7 +24,7 @@ from src.core.middleware.cors import configure_cors
 from src.router import v1_router
 from src.routers.content_files import router as content_files_router
 from src.routers.local_content import router as local_content_router
-from src.security.recovery_privacy import is_recovery_event, recovery_request
+from src.security.recovery_privacy import is_recovery_event, is_recovery_log
 
 
 learnhouse_config: LearnHouseConfig = get_learnhouse_config()
@@ -62,7 +62,7 @@ if learnhouse_config.general_config.sentry_config.dsn:
         profile_lifecycle="trace",
         before_send=_before_send,
         before_send_transaction=lambda event, hint: None if is_recovery_event(event) else event,
-        before_send_log=lambda log, hint: None if recovery_request.get() else log,
+        before_send_log=lambda log, hint: None if is_recovery_log(log) else log,
         integrations=[
             LoggingIntegration(
                 level=logging.INFO,

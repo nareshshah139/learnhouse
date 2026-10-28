@@ -4099,6 +4099,8 @@ async def get_course_grade_leaderboard(
         return int(match.group(1)) if match else None
 
     week_by_assignment: dict[int, int] = {}
+    week_range_ends: dict[int, set[int]] = {}
+    week_range_pattern = re.compile(r"\bweeks?\s+(\d+)\s*[-–—]\s*(\d+)\b", re.IGNORECASE)
     for assignment in assignments:
         if assignment.id is None:
             continue
@@ -4113,6 +4115,10 @@ async def get_course_grade_leaderboard(
             # assignment inherits its chapter's 1-based position.
             week_number = chapter_ordinal.get(assignment.chapter_id, 1)
         week_by_assignment[int(assignment.id)] = week_number
+        for range_match in week_range_pattern.finditer(assignment.title or ""):
+            range_start, range_end = map(int, range_match.groups())
+            if range_start == week_number and range_end > range_start:
+                week_range_ends.setdefault(week_number, set()).add(range_end)
 
     task_rows = (
         await db_session.execute(
@@ -4345,7 +4351,11 @@ async def get_course_grade_leaderboard(
         "weeks": [
             {
                 "week_number": week_number,
-                "label": f"Week {week_number}",
+                "label": (
+                    f"Weeks {week_number}–{next(iter(week_range_ends[week_number]))}"
+                    if len(week_range_ends.get(week_number, set())) == 1
+                    else f"Week {week_number}"
+                ),
                 "assignment_weight": week_ranking_config[week_number][
                     "assignment_weight"
                 ],

@@ -1333,6 +1333,113 @@ class TestGetAssignmentsFromCourse:
 
 
 class TestCourseGradeLeaderboard:
+    @pytest.mark.parametrize("can_manage", [False, True])
+    @pytest.mark.parametrize(
+        ("titles", "expected_label"),
+        [
+            (["Weeks 3–5 Product Studio"], "Weeks 3–5"),
+            (["Weeks 3-5 Product Studio", "Weeks 3—5 Product Studio"], "Weeks 3–5"),
+            (["wEeKs 3 - 5 Product Studio"], "Weeks 3–5"),
+            (["Week 3 assignment"], "Week 3"),
+            (["Weeks 3–5 Product Studio", "Weeks 3–6 Product Studio"], "Week 3"),
+            (["Weeks 3–2 Product Studio"], "Week 3"),
+            (["Weeks 4–6 Product Studio"], "Week 3"),
+        ],
+    )
+    async def test_period_labels_preserve_gradebook_values(
+        self,
+        mock_request,
+        db,
+        org,
+        course,
+        chapter,
+        activity,
+        assignment,
+        assignment_task,
+        graded_submission,
+        admin_user,
+        regular_user,
+        can_manage,
+        titles,
+        expected_label,
+    ):
+        chapter.name = "Week 3"
+        course.extra_metadata = {
+            "gradebook_weights": {"3": {"assignment": 60, "discussion": 40}}
+        }
+        assignment.title = "Product Studio"
+        assignments = [assignment]
+        for index in range(1, len(titles)):
+            assignments.append(
+                Assignment(
+                    id=assignment.id + index,
+                    title="Product Studio",
+                    description="An assignment for testing",
+                    due_date="2030-01-01",
+                    published=True,
+                    grading_type=GradingTypeEnum.NUMERIC,
+                    org_id=org.id,
+                    course_id=course.id,
+                    chapter_id=chapter.id,
+                    activity_id=activity.id,
+                    assignment_uuid=f"assignment_period_{index}",
+                    creation_date=str(datetime.now()),
+                    update_date=str(datetime.now()),
+                )
+            )
+        discussion_grade = CourseDiscussionGrade(
+            course_id=course.id,
+            user_id=regular_user.id,
+            week_number=3,
+            score=50,
+            max_score=100,
+            graded_by_id=admin_user.id,
+            creation_date=str(datetime.now()),
+            update_date=str(datetime.now()),
+        )
+        db.add_all([chapter, course, discussion_grade, *assignments])
+        await db.commit()
+        current_user = admin_user if can_manage else regular_user
+
+        with patch(_PATCH_RBAC, new_callable=AsyncMock), \
+             patch(_PATCH_AUTH_ROLES, new_callable=AsyncMock, return_value=can_manage):
+            before = await get_course_grade_leaderboard(
+                mock_request, course.course_uuid, current_user, db
+            )
+            for item, title in zip(assignments, titles):
+                item.title = title
+                db.add(item)
+            await db.commit()
+            after = await get_course_grade_leaderboard(
+                mock_request, course.course_uuid, current_user, db
+            )
+
+        assert before["weeks"] == [
+            {
+                "week_number": 3,
+                "label": "Week 3",
+                "assignment_weight": 60,
+                "discussion_weight": 40,
+            }
+        ]
+        learner = before["gradebook"][0]
+        assert learner["weeks"]["3"]["assignment"]["percentage"] == 85.0
+        assert learner["weeks"]["3"]["discussion"]["percentage"] == 50.0
+        assert learner["weeks"]["3"]["weighted_percentage"] == 71.0
+        assert learner["cumulative_percentage"] == 71.0
+        assert learner["rank"] == 1
+        assert after["weeks"][0]["label"] == expected_label
+        before["weeks"][0]["label"] = expected_label
+        assert after == before
+        await db.refresh(course)
+        await db.refresh(graded_submission)
+        await db.refresh(discussion_grade)
+        assert course.extra_metadata == {
+            "gradebook_weights": {"3": {"assignment": 60, "discussion": 40}}
+        }
+        assert graded_submission.grade == 85
+        assert discussion_grade.score == 50
+
     async def test_learner_route_uuid_without_prefix_loads_gradebook(
         self,
         mock_request,

@@ -379,6 +379,10 @@ function PreviewBody({ activity }: { activity: any }) {
     return <MarkdownPreview url={content.markdown_url || ''} />
   }
 
+  if (type === 'TYPE_DYNAMIC' && sub === 'SUBTYPE_DYNAMIC_HTML') {
+    return <EmptyState text="Interactive HTML lesson" />
+  }
+
   if (type === 'TYPE_DYNAMIC' && sub === 'SUBTYPE_DYNAMIC_EMBED') {
     const url: string = content.embed_url || ''
     if (!url) return <EmptyState text="No embed URL configured" />

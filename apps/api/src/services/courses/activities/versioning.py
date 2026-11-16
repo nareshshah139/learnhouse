@@ -1,7 +1,7 @@
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy import desc
-from src.db.courses.activities import Activity
+from src.db.courses.activities import Activity, ActivitySubTypeEnum
 from src.db.courses.activity_versions import ActivityVersion, ActivityVersionRead, ActivityStateRead
 from src.db.courses.courses import Course
 from src.db.users import User, PublicUser, AnonymousUser
@@ -299,6 +299,9 @@ async def restore_activity_version(
         )
 
     await check_resource_access(request, db_session, current_user, course.course_uuid, AccessAction.UPDATE)
+
+    if activity.activity_sub_type == ActivitySubTypeEnum.SUBTYPE_DYNAMIC_HTML:
+        raise HTTPException(status_code=409, detail="Interactive HTML source version restore is not supported")
 
     # Get the version to restore
     statement = (

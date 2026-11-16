@@ -17,7 +17,7 @@ from fastapi import HTTPException, Request
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from src.db.courses.activities import Activity
+from src.db.courses.activities import Activity, ActivitySubTypeEnum
 from src.db.courses.blocks import Block
 from src.db.courses.chapter_activities import ChapterActivity
 from src.db.courses.chapters import Chapter
@@ -26,6 +26,7 @@ from src.db.courses.courses import Course
 from src.db.organizations import Organization
 from src.db.users import PublicUser, AnonymousUser, APITokenUser
 from src.security.rbac import check_resource_access, AccessAction
+from src.services.courses.activities.interactive_html import reject_html_transfer
 
 from .models import ExportManifest, ExportCourseInfo
 from .storage_utils import read_file_content, list_directory, walk_directory
@@ -97,6 +98,7 @@ async def export_courses_batch(
             )
 
         await check_resource_access(request, db_session, current_user, course.course_uuid, AccessAction.READ)
+        await reject_html_transfer(course.id, db_session)
 
         if org is None:
             org_statement = select(Organization).where(Organization.id == course.org_id)
@@ -170,6 +172,10 @@ async def _load_course_export_data(
             .order_by(ChapterActivity.order)
         )).all()
         for activity, ca in all_activities:
+            # Recheck the actual exported rows: the earlier preflight may have
+            # observed an older READ COMMITTED snapshot.
+            if activity.activity_sub_type == ActivitySubTypeEnum.SUBTYPE_DYNAMIC_HTML:
+                raise HTTPException(status_code=409, detail="Course copy and export do not yet support interactive HTML activities")
             activities_by_chapter.setdefault(ca.chapter_id, []).append((activity, ca))
 
     dynamic_activity_ids = [

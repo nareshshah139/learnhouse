@@ -20,6 +20,7 @@ import React, { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@lib/query/keys'
 import toast from 'react-hot-toast'
+import { putInteractiveHtml } from '@/lib/interactiveHtml'
 import { useTranslation } from 'react-i18next'
 import { useLHAnalytics, AnalyticsEvent } from '@services/analytics'
 
@@ -60,7 +61,13 @@ function NewActivityButton(props: NewActivityButtonProps) {
       { revalidate: 1800 }
     )
     const toast_loading = toast.loading(t('dashboard.courses.structure.activity.toasts.creating'))
-    await createActivity(activity, props.chapterId, org.id, access_token)
+    try {
+      await createActivity(activity, props.chapterId, org.id, access_token)
+    } catch (error) {
+      toast.dismiss(toast_loading)
+      toast.error(error instanceof Error ? error.message : 'Unable to create activity.')
+      return
+    }
     track(AnalyticsEvent.ActivityCreated, { activity_type: activity?.type ?? activity?.activity_type })
     queryClient.invalidateQueries({ queryKey: queryKeys.courses.meta(cleanCourseUuid(course.courseStructure.course_uuid)) })
     toast.dismiss(toast_loading)
@@ -76,6 +83,31 @@ function NewActivityButton(props: NewActivityButtonProps) {
     })
     await revalidateTags(['courses'], props.orgslug)
     router.refresh()
+  }
+
+  const submitInteractiveHtml = async (
+    activity: any, html: string, draftUuid: string | null,
+    onDraftCreated: (_uuid: string) => void,
+  ) => {
+    let uuid = draftUuid
+    if (!uuid) {
+      const org = await getOrganizationContextInfoWithoutCredentials(props.orgslug, { revalidate: 1800 })
+      const created = await createActivity(activity, props.chapterId, org.id, access_token)
+      const createdUuid = created?.activity_uuid
+      if (typeof createdUuid !== 'string' || !createdUuid) throw new Error('The draft was created but its identifier was unavailable. Refresh the course to find it.')
+      uuid = createdUuid
+      onDraftCreated(createdUuid)
+    }
+    if (!uuid) throw new Error('The draft could not be identified.')
+    try {
+      await putInteractiveHtml(uuid, html, access_token)
+    } catch (error) {
+      await refreshStructure()
+      throw new Error(`The draft exists, but the upload failed. ${error instanceof Error ? error.message : 'Please retry.'}`)
+    }
+    setNewActivityModal(false)
+    toast.success('HTML lesson created as a draft.')
+    await refreshStructure()
   }
 
   // Submit File Upload
@@ -206,6 +238,7 @@ function NewActivityButton(props: NewActivityButtonProps) {
             submitFileActivity={submitFileActivity}
             submitExternalVideo={submitExternalVideo}
             submitActivity={submitActivity}
+            submitInteractiveHtml={submitInteractiveHtml}
             chapterId={props.chapterId}
             course={course}
             orgslug={props.orgslug}

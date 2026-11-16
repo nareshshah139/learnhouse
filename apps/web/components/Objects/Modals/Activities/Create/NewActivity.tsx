@@ -9,6 +9,7 @@ import VideoModal from './NewActivityModal/VideoActivityModal'
 import DocumentPdfModal from './NewActivityModal/DocumentActivityModal'
 import Assignment from './NewActivityModal/AssignmentActivityModal'
 import ResourceModal from './NewActivityModal/ResourceActivityModal'
+import InteractiveHtmlActivityModal from './NewActivityModal/InteractiveHtmlActivityModal'
 import { useOrg } from '@components/Contexts/OrgContext'
 import { useTranslation } from 'react-i18next'
 
@@ -66,12 +67,20 @@ type ActivityTypeCard = {
   icon: any
   customIcon?: React.ComponentType
   labelKey: string
+  label?: string
   color: { icon: string }
   pattern: string
   patternSize?: string
 }
 
 export const activityTypes: ActivityTypeCard[] = [
+  {
+    key: 'interactive-html', icon: Browsers,
+    labelKey: 'dashboard.courses.structure.activity.types.interactive_html',
+    label: 'Interactive HTML', color: { icon: 'text-blue-400' },
+    pattern: `radial-gradient(circle, rgba(191,219,254,0.3) 1px, transparent 1px)`,
+    patternSize: '12px 12px',
+  },
   {
     key: 'dynamic',
     icon: Browsers,
@@ -155,6 +164,7 @@ const scormActivityType: ActivityTypeCard = {
 function NewActivityModal({
   closeModal,
   submitActivity,
+  submitInteractiveHtml,
   submitFileActivity,
   submitExternalVideo,
   chapterId,
@@ -202,7 +212,7 @@ function NewActivityModal({
                     />
                   )}
                   <span className="text-xs font-medium text-gray-500 bg-white nice-shadow rounded-full px-3 py-1">
-                    {t(activity.labelKey)}
+                      {activity.label || t(activity.labelKey)}
                   </span>
                 </div>
               </div>
@@ -213,6 +223,9 @@ function NewActivityModal({
 
       {selectedView !== 'home' && (
         <div className="p-5">
+          {selectedView === 'interactive-html' && (
+            <InteractiveHtmlActivityModal submitInteractiveHtml={submitInteractiveHtml} chapterId={chapterId} course={course} />
+          )}
           {selectedView === 'dynamic' && (
             <DynamicCanvaModal
               submitActivity={submitActivity}

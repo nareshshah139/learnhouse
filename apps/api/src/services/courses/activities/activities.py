@@ -3,7 +3,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from src.db.courses.courses import Course
 from src.db.courses.chapters import Chapter
-from src.db.courses.activities import ActivityCreate, Activity, ActivityRead, ActivityUpdate
+from src.db.courses.activities import ActivityCreate, Activity, ActivityRead, ActivityUpdate, ActivitySubTypeEnum, ActivityTypeEnum
 from src.db.courses.chapter_activities import ChapterActivity
 from src.db.organizations import Organization, OrganizationRead
 from src.db.organization_config import OrganizationConfig
@@ -20,6 +20,7 @@ import logging
 from src.core.ee_hooks import check_ee_activity_paid_access
 from src.security.rbac import check_resource_access, AccessAction
 from src.services.courses.activities.versioning import create_activity_version
+from src.services.courses.activities.interactive_html import require_html_editor
 from src.services.courses.locks import (
     batch_accessible_restricted_uuids,
     is_locked_for_user,
@@ -66,6 +67,11 @@ async def create_activity(
         )
 
     await check_resource_access(request, db_session, current_user, course.course_uuid, AccessAction.CREATE)
+
+    if activity_object.activity_sub_type == ActivitySubTypeEnum.SUBTYPE_DYNAMIC_HTML:
+        await require_html_editor(request, course, current_user, db_session)
+        if activity_object.activity_type != ActivityTypeEnum.TYPE_DYNAMIC or activity_object.content != {}:
+            raise HTTPException(status_code=422, detail="Interactive HTML source must be uploaded separately")
 
     # Create Activity
     activity = Activity(**activity_object.model_dump())
@@ -387,6 +393,18 @@ async def update_activity(
     # Update only the fields that were explicitly set (not default values)
     # Using model_dump(exclude_unset=True) to get only the fields that were passed in
     update_data = activity_object.model_dump(exclude_unset=True)
+
+    html_subtype = ActivitySubTypeEnum.SUBTYPE_DYNAMIC_HTML
+    new_subtype = update_data.get("activity_sub_type", activity.activity_sub_type)
+    new_type = update_data.get("activity_type", activity.activity_type)
+    if activity.activity_sub_type == html_subtype or new_subtype == html_subtype:
+        await require_html_editor(request, course, current_user, db_session)
+        if activity.activity_sub_type != html_subtype:
+            raise HTTPException(status_code=422, detail="Create a new interactive HTML activity")
+        if new_subtype != html_subtype or new_type != ActivityTypeEnum.TYPE_DYNAMIC:
+            raise HTTPException(status_code=422, detail="Interactive HTML activity type cannot be changed")
+        if update_data.get("content", activity.content) != {}:
+            raise HTTPException(status_code=422, detail="Interactive HTML source must be uploaded separately")
 
     # Create a version snapshot before updating content
     # This preserves the current state for version history.

@@ -1143,7 +1143,7 @@ async def clone_course(
     )
     from collections import defaultdict
     from src.db.courses.chapters import Chapter
-    from src.db.courses.activities import Activity
+    from src.db.courses.activities import Activity, ActivitySubTypeEnum
     from src.db.courses.blocks import Block
     from src.db.courses.course_chapters import CourseChapter
     from src.db.courses.chapter_activities import ChapterActivity
@@ -1173,6 +1173,31 @@ async def clone_course(
     await require_org_membership(
         resolve_acting_user_id(current_user), original_course.org_id, db_session
     )
+
+    from src.services.courses.activities.interactive_html import reject_html_transfer
+    await reject_html_transfer(original_course.id, db_session)
+
+    # Use the checked activity rows for the entire clone. A separate preflight
+    # can miss an HTML activity committed before this enumeration under READ COMMITTED.
+    statement = (
+        select(Chapter, CourseChapter)
+        .join(CourseChapter, Chapter.id == CourseChapter.chapter_id)
+        .where(CourseChapter.course_id == original_course.id)
+        .order_by(CourseChapter.order)
+    )
+    chapter_results = (await db_session.execute(statement)).all()
+    _original_chapter_ids = [ch.id for ch, _ in chapter_results]
+    _all_act_results = (await db_session.execute(
+        select(Activity, ChapterActivity)
+        .join(ChapterActivity, Activity.id == ChapterActivity.activity_id)
+        .where(ChapterActivity.chapter_id.in_(_original_chapter_ids))
+        .order_by(ChapterActivity.order)
+    )).all()
+    _activities_by_chapter: dict = defaultdict(list)
+    for _act, _ca in _all_act_results:
+        if _act.activity_sub_type == ActivitySubTypeEnum.SUBTYPE_DYNAMIC_HTML:
+            raise HTTPException(status_code=409, detail="Course copy and export do not yet support interactive HTML activities")
+        _activities_by_chapter[_ca.chapter_id].append((_act, _ca))
 
     # Usage check for creating new course
     await check_limits_with_usage("courses", original_course.org_id, db_session)
@@ -1259,27 +1284,6 @@ async def clone_course(
     )
     db_session.add(resource_author)
     await db_session.flush()
-
-    # Get original chapters with order
-    statement = (
-        select(Chapter, CourseChapter)
-        .join(CourseChapter, Chapter.id == CourseChapter.chapter_id)
-        .where(CourseChapter.course_id == original_course.id)
-        .order_by(CourseChapter.order)
-    )
-    chapter_results = (await db_session.execute(statement)).all()
-
-    # Pre-fetch all activities for every chapter in one query to avoid N+1
-    _original_chapter_ids = [ch.id for ch, _ in chapter_results]
-    _all_act_results = (await db_session.execute(
-        select(Activity, ChapterActivity)
-        .join(ChapterActivity, Activity.id == ChapterActivity.activity_id)
-        .where(ChapterActivity.chapter_id.in_(_original_chapter_ids))
-        .order_by(ChapterActivity.order)
-    )).all()
-    _activities_by_chapter: dict = defaultdict(list)
-    for _act, _ca in _all_act_results:
-        _activities_by_chapter[_ca.chapter_id].append((_act, _ca))
 
     # Pre-fetch all blocks for TYPE_DYNAMIC activities in one query to avoid N+1
     _dynamic_activity_ids = [

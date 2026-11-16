@@ -115,6 +115,34 @@ def _safe_manifest_join(extract_dir: str, manifest_path: Optional[str]) -> Optio
     return target
 
 
+def _reject_interactive_html_import(extract_dir: str, course_uuids: list[str]) -> None:
+    manifest_path = os.path.join(extract_dir, "manifest.json")
+    if not os.path.isfile(manifest_path):
+        return
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as stream:
+            manifest = json.load(stream)
+        for entry in manifest.get("courses", []):
+            if entry.get("course_uuid") not in course_uuids:
+                continue
+            course_path = _safe_manifest_join(extract_dir, entry.get("path"))
+            if not course_path:
+                continue
+            chapters_path = os.path.join(course_path, "chapters")
+            for root, _, files in os.walk(chapters_path, followlinks=False):
+                if "activity.json" not in files:
+                    continue
+                path = os.path.join(root, "activity.json")
+                if os.path.islink(path):
+                    raise HTTPException(status_code=400, detail="Invalid activity metadata")
+                with open(path, "r", encoding="utf-8") as stream:
+                    activity = json.load(stream)
+                if activity.get("activity_sub_type") == ActivitySubTypeEnum.SUBTYPE_DYNAMIC_HTML.value:
+                    raise HTTPException(status_code=409, detail="Course import does not yet support interactive HTML activities")
+    except (OSError, UnicodeError, ValueError, TypeError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid course package metadata")
+
+
 async def analyze_import_package(
     request: Request,
     zip_file: UploadFile,
@@ -377,6 +405,7 @@ async def import_courses(
     # two requests try to import the same temp_id simultaneously
     temp_dir = os.path.join(TEMP_IMPORT_DIR, temp_id)
     work_dir = os.path.join(TEMP_IMPORT_DIR, f"{temp_id}-importing")
+    _reject_interactive_html_import(os.path.join(temp_dir, "extracted"), options.course_uuids)
     try:
         os.rename(temp_dir, work_dir)
     except FileNotFoundError:
@@ -701,6 +730,8 @@ async def _import_activity(
     """
     Import an activity and its blocks/files.
     """
+    if activity_data.get("activity_sub_type") == ActivitySubTypeEnum.SUBTYPE_DYNAMIC_HTML.value:
+        raise HTTPException(status_code=409, detail="Course import does not yet support interactive HTML activities")
     new_activity_uuid = f"activity_{uuid4()}"
 
     # Parse activity type

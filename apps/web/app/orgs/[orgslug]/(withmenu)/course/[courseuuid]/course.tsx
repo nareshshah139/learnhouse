@@ -215,6 +215,7 @@ const CourseClient = (props: any) => {
   }
 
   const getActivityTypeLabel = (activityType: string, activitySubType?: string) => {
+    if (activitySubType === 'SUBTYPE_DYNAMIC_HTML') return t('activities.interactive_html', { defaultValue: 'Interactive HTML' })
     if (activitySubType === 'SUBTYPE_DYNAMIC_MARKDOWN') return t('activities.markdown')
     if (activitySubType === 'SUBTYPE_DYNAMIC_EMBED') return t('activities.embed')
     switch (activityType) {
@@ -236,6 +237,7 @@ const CourseClient = (props: any) => {
   }
 
   const getActivityTypeIcon = (activityType: string, activitySubType?: string, size: number = 10) => {
+    if (activitySubType === 'SUBTYPE_DYNAMIC_HTML') return <Globe size={size} />
     if (activitySubType === 'SUBTYPE_DYNAMIC_MARKDOWN') return <MarkdownLogo size={size} />
     if (activitySubType === 'SUBTYPE_DYNAMIC_EMBED') return <Globe size={size} />
     switch (activityType) {

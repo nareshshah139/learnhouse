@@ -62,6 +62,7 @@ const AIChatBotProvider = lazy(() => import('@components/Contexts/AI/AIChatBotCo
 const ScormActivity = lazy(() => import('../../../../../../../../ee/components/Activities/ScormActivity'))
 const MarkdownActivity = lazy(() => import('@components/Objects/Activities/Markdown/MarkdownActivity'))
 const EmbedActivity = lazy(() => import('@components/Objects/Activities/Embed/EmbedActivity'))
+const InteractiveHtmlActivity = lazy(() => import('@components/Objects/Activities/InteractiveHtml/InteractiveHtmlActivity'))
 const ResourceActivity = lazy(() => import('@components/Objects/Activities/Resource/ResourceActivity'))
 
 // Loading fallback component
@@ -304,6 +305,9 @@ function ActivityClient(props: ActivityClientProps) {
 
     switch (activity.activity_type) {
       case 'TYPE_DYNAMIC':
+        if (activity.activity_sub_type === 'SUBTYPE_DYNAMIC_HTML') {
+          return <Suspense fallback={<LoadingFallback />}><InteractiveHtmlActivity activity={activity} /></Suspense>
+        }
         if (activity.activity_sub_type === 'SUBTYPE_DYNAMIC_MARKDOWN') {
           return (
             <Suspense fallback={<LoadingFallback />}>

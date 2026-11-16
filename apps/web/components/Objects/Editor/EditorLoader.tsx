@@ -9,6 +9,7 @@ import EditorSkeleton from './EditorSkeleton'
 import EditorWrapper from './EditorWrapper'
 import MarkdownActivity from '@components/Objects/Activities/Markdown/MarkdownActivity'
 import EmbedActivity from '@components/Objects/Activities/Embed/EmbedActivity'
+import InteractiveHtmlActivity from '@components/Objects/Activities/InteractiveHtml/InteractiveHtmlActivity'
 import ResourceActivity from '@components/Objects/Activities/Resource/ResourceActivity'
 import OnboardingTracker from '@components/Dashboard/Onboarding/OnboardingTracker'
 
@@ -58,6 +59,10 @@ export default function EditorLoader({ courseid: _courseid, activityuuid }: Edit
   const isMarkdownActivity = activity?.activity_sub_type === 'SUBTYPE_DYNAMIC_MARKDOWN'
   const isEmbedActivity = activity?.activity_sub_type === 'SUBTYPE_DYNAMIC_EMBED'
   const isResourceActivity = activity?.activity_sub_type === 'SUBTYPE_DYNAMIC_RESOURCE'
+
+  if (activity?.activity_sub_type === 'SUBTYPE_DYNAMIC_HTML' && dataReady) {
+    return <InteractiveHtmlActivity activity={activity} editable />
+  }
 
   if (isMarkdownActivity && dataReady) {
     return <MarkdownActivity activity={activity} editable />

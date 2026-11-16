@@ -19,6 +19,7 @@ interface Props {
 
 // Helper functions
 function getActivityTypeLabel(activityType: string, t: any, activitySubType?: string): string {
+  if (activitySubType === 'SUBTYPE_DYNAMIC_HTML') return t('activities.interactive_html', { defaultValue: 'Interactive HTML' })
   if (activitySubType === 'SUBTYPE_DYNAMIC_MARKDOWN') return t('activities.markdown')
   if (activitySubType === 'SUBTYPE_DYNAMIC_EMBED') return t('activities.embed')
   switch (activityType) {
@@ -60,6 +61,7 @@ function getActivityTypeBadgeColor(activityType: string): string {
 
 // Memoized activity type icon component
 const ActivityTypeIcon = memo(({ activityType, activitySubType }: { activityType: string; activitySubType?: string }) => {
+  if (activitySubType === 'SUBTYPE_DYNAMIC_HTML') return <Globe size={16} className="text-gray-400" />
   if (activitySubType === 'SUBTYPE_DYNAMIC_MARKDOWN') return <MarkdownLogo size={16} className="text-gray-400" />
   if (activitySubType === 'SUBTYPE_DYNAMIC_EMBED') return <Globe size={16} className="text-gray-400" />
   switch (activityType) {

@@ -1,6 +1,7 @@
 from typing import List, Optional
 import json
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, Form, Request, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from src.db.courses.activities import ActivityCreate, ActivityRead, ActivityUpdate
 from src.db.courses.activity_versions import ActivityVersionRead, ActivityStateRead
@@ -21,6 +22,9 @@ from src.services.courses.activities.versioning import (
     get_activity_version,
     get_activity_state,
     restore_activity_version,
+)
+from src.services.courses.activities.interactive_html import (
+    MAX_HTML_BYTES, load_activity_and_course, read_html, require_html_editor, write_html,
 )
 from src.security.auth import get_current_user
 from src.services.courses.activities.pdf import (
@@ -43,6 +47,46 @@ from src.services.courses.lock_usergroups import (
 )
 
 router = APIRouter()
+
+_HTML_RESPONSE_HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+_MAX_HTML_JSON_BYTES = 6 * MAX_HTML_BYTES + 1024
+
+
+@router.get("/{activity_uuid}/interactive-html")
+async def api_read_interactive_html(
+    request: Request,
+    activity_uuid: str,
+    current_user: PublicUser = Depends(get_current_user),
+    db_session=Depends(get_db_session),
+):
+    html = await read_html(request, activity_uuid, current_user, db_session)
+    return JSONResponse({"html": html}, headers=_HTML_RESPONSE_HEADERS)
+
+
+@router.put("/{activity_uuid}/interactive-html")
+async def api_write_interactive_html(
+    request: Request,
+    activity_uuid: str,
+    current_user: PublicUser = Depends(get_current_user),
+    db_session=Depends(get_db_session),
+):
+    activity, course = await load_activity_and_course(activity_uuid, db_session)
+    await require_html_editor(request, course, current_user, db_session)
+    if request.headers.get("content-encoding", "identity").lower() != "identity":
+        raise HTTPException(status_code=415, detail="Compressed request bodies are not supported")
+    parts = bytearray()
+    async for chunk in request.stream():
+        if len(parts) + len(chunk) > _MAX_HTML_JSON_BYTES:
+            raise HTTPException(status_code=413, detail="Request body is too large")
+        parts.extend(chunk)
+    try:
+        body = json.loads(parts)
+    except (ValueError, UnicodeDecodeError):
+        raise HTTPException(status_code=422, detail="Expected a JSON object with an html string")
+    if not isinstance(body, dict) or set(body) != {"html"}:
+        raise HTTPException(status_code=422, detail="Expected a JSON object with an html string")
+    html = await write_html(request, activity_uuid, current_user, body["html"], db_session)
+    return JSONResponse({"html": html}, headers=_HTML_RESPONSE_HEADERS)
 
 
 class ExternalVideoUpdateBody(BaseModel):

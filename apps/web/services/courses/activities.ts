@@ -19,7 +19,10 @@ export async function createActivity(
     `${getAPIUrl()}activities/?coursechapter_id=${chapter_id}&org_id=${org_id}`,
     RequestBodyWithAuthHeader('POST', data, null, access_token)
   )
-  const res = await result.json()
+  const res = await result.json().catch(() => null)
+  if (!result.ok) {
+    throw new Error(typeof res?.detail === 'string' ? res.detail : `Failed to create activity (HTTP ${result.status}).`)
+  }
   return res
 }
 

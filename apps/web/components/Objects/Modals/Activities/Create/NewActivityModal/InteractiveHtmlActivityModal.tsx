@@ -29,7 +29,7 @@ export default function InteractiveHtmlActivityModal({ submitInteractiveHtml, ch
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <p className="text-sm text-gray-600">Upload a self-contained UTF-8 HTML file, up to 1 MiB. Inline CSS and JavaScript, scripts from unpkg.com, and Google Fonts are allowed. Other external resources, fetch requests, and form submissions are blocked.</p>
+      <p className="text-sm text-gray-600">Upload a self-contained UTF-8 HTML file, up to 10 MiB. Inline CSS and JavaScript, scripts from unpkg.com, and Google Fonts are allowed. Other external resources, fetch requests, and form submissions are blocked.</p>
       <p className="text-sm text-gray-600">Third-party scripts can run in the lesson and the frame can navigate away. Do not ask learners to enter passwords or secrets in untrusted lessons.</p>
       <label className="block text-sm font-medium text-gray-700">
         Lesson name

@@ -1,9 +1,9 @@
-export const MAX_INTERACTIVE_HTML_BYTES = 1024 * 1024
+export const MAX_INTERACTIVE_HTML_BYTES = 10 * 1024 * 1024
 
 export async function readInteractiveHtmlFile(file: File): Promise<string> {
   if (!/\.html?$/i.test(file.name)) throw new Error('Choose an .html or .htm file.')
   if (file.size === 0 || file.size > MAX_INTERACTIVE_HTML_BYTES) {
-    throw new Error('Choose a non-empty HTML file no larger than 1 MiB.')
+    throw new Error('Choose a non-empty HTML file no larger than 10 MiB.')
   }
   try {
     const html = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer())

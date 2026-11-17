@@ -73,7 +73,7 @@ export default function InteractiveHtmlActivity({ activity, editable = false }: 
       </p>
       {editable && (
         <label className="block text-sm font-medium text-gray-700">
-          Replace HTML file (.html or .htm, maximum 1 MiB)
+          Replace HTML file (.html or .htm, maximum 10 MiB)
           <input className="mt-2 block w-full text-sm" type="file" accept=".html,.htm,text/html" disabled={saving} onChange={replaceFile} />
         </label>
       )}

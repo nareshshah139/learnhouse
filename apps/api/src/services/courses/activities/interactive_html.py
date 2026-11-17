@@ -10,7 +10,7 @@ from src.db.courses.interactive_html import InteractiveHtml
 from src.db.users import PublicUser
 from src.security.rbac import AccessAction, check_resource_access
 
-MAX_HTML_BYTES = 1024 * 1024
+MAX_HTML_BYTES = 10 * 1024 * 1024
 
 
 def validate_html(html: object) -> str:
@@ -21,7 +21,7 @@ def validate_html(html: object) -> str:
     except UnicodeEncodeError:
         raise HTTPException(status_code=422, detail="HTML must be valid UTF-8")
     if size > MAX_HTML_BYTES:
-        raise HTTPException(status_code=413, detail="HTML exceeds the 1 MiB limit")
+        raise HTTPException(status_code=413, detail="HTML exceeds the 10 MiB limit")
     return html
 
 

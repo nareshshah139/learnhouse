@@ -25,7 +25,8 @@ async def html_activity(db, activity):
 
 
 def test_html_limit_is_utf8_bytes():
-    assert len(validate_html("é" * (MAX_HTML_BYTES // 2)).encode()) == MAX_HTML_BYTES
+    assert MAX_HTML_BYTES == 10 * 1024 * 1024
+    assert len(validate_html("é" * (MAX_HTML_BYTES // 2)).encode()) == 10 * 1024 * 1024
     with pytest.raises(HTTPException) as exc:
         validate_html("é" * (MAX_HTML_BYTES // 2) + "x")
     assert exc.value.status_code == 413
@@ -221,6 +222,29 @@ async def test_http_json_contract_and_no_cache(db, html_activity, admin_user):
         assert json.loads(loaded.body) == {"html": "<script>2+2</script>"}
         assert loaded.headers["cache-control"] == "no-store"
         assert loaded.headers["x-content-type-options"] == "nosniff"
+
+
+@pytest.mark.asyncio
+async def test_http_upload_accepts_10_mib_and_rejects_one_byte_more(db, html_activity, admin_user):
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+    from src.core.events.database import get_db_session
+    from src.routers.courses.activities.activities import router
+    from src.security.auth import get_current_user
+
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_db_session] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: admin_user
+
+    content = "x" * (10 * 1024 * 1024)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        path = f"/{html_activity.activity_uuid}/interactive-html"
+        saved = await client.put(path, json={"html": content})
+        assert saved.status_code == 200
+        assert saved.json() == {"html": content}
+        rejected = await client.put(path, json={"html": content + "x"})
+        assert rejected.status_code == 413
 
 
 @pytest.mark.asyncio
